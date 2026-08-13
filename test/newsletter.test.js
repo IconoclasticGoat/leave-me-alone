@@ -93,6 +93,16 @@ describe('looksLikeNewsletter — negatives', () => {
       <input type="email" autocomplete="username"><button>Go</button>`));
     expect(looksLikeNewsletter(el)).toBe(false);
   });
+
+  it('leaves an account signup whose only marketing word is "sign up"', () => {
+    // Phrased to dodge every AUTH_MARKER. It survives because "sign up" is
+    // not a positive signal on its own — the phrase is shared with
+    // registration forms and cannot tell them apart.
+    const el = mount(overlay(`<h2>New here?</h2>
+      <p>Sign up and we'll email you a link to access your account.</p>
+      <input type="email"><button>Continue</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
 });
 
 describe('dismissNewsletter', () => {

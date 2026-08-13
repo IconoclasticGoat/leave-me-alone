@@ -1,7 +1,13 @@
 import { isShown } from '../engine/tools.js';
 
+// Deliberately excludes "sign up" / "signup". Those are the one phrase a
+// newsletter popup and an account-creation overlay genuinely share, so they
+// cannot distinguish the two. Real newsletter popups almost always also say
+// "newsletter", "subscribe", "% off", "discount", or "mailing list"; an
+// overlay whose ONLY marketing signal is "sign up" is indistinguishable from
+// a registration form, and we leave those alone.
 const SUBSCRIBE_WORDS = [
-  'newsletter', 'subscribe', 'sign up', 'signup', 'join our', 'mailing list',
+  'newsletter', 'subscribe', 'join our', 'mailing list',
   '% off', 'discount', 'first order', 'stay in the loop', 'get updates',
 ];
 
