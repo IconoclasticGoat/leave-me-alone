@@ -344,9 +344,11 @@ git commit -m "feat: settings store with per-site pause"
 
 **Interfaces:**
 - Consumes: `DEFAULTS` from `src/settings.js`.
-- Produces: `applyContentSettings(settings)` → `Promise<{ ok: string[], failed: Array<{key, error}> }>`.
+- Produces: `applyContentSettings(settings)` → `Promise<{ ok: string[], failed: Array<{type, settingKey, error}> }>`.
 
 The failure report matters: a toggle that shows as on but is not enforced is worse than one that admits it failed. Task 5 surfaces this in the popup.
+
+Each `failed` entry carries **both** identifiers. `type` is the Chrome content-settings type that rejected (`camera`); `settingKey` is the user-facing toggle that drove it (`cameraMic`). One toggle can drive two types, so type alone cannot tell the popup which switch to mark — and marking the switch is what the design doc requires.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -391,10 +393,35 @@ describe('applyContentSettings', () => {
     expect(calls).toContainEqual(['microphone', 'block']);
   });
 
-  it('reports failures instead of throwing', async () => {
+  it('reports failures instead of throwing, naming both type and toggle', async () => {
     chrome.contentSettings.sound.set = async () => { throw new Error('unsupported'); };
     const r = await applyContentSettings({ autoplaySound: true });
-    expect(r.failed).toEqual([{ key: 'sound', error: 'unsupported' }]);
+    expect(r.failed).toEqual([
+      { type: 'sound', settingKey: 'autoplaySound', error: 'unsupported' },
+    ]);
+  });
+
+  it('names the driving toggle when one of a pair fails', async () => {
+    chrome.contentSettings.camera.set = async () => { throw new Error('nope'); };
+    const r = await applyContentSettings({ cameraMic: true });
+    expect(r.failed).toEqual([
+      { type: 'camera', settingKey: 'cameraMic', error: 'nope' },
+    ]);
+    // microphone still applied — one failure must not abort its partner
+    expect(calls).toContainEqual(['microphone', 'block']);
+  });
+
+  it('keeps applying later map entries after an earlier one fails', async () => {
+    chrome.contentSettings.notifications.set = async () => { throw new Error('x'); };
+    const r = await applyContentSettings({ notifications: true, sessionOnlyCookies: true });
+    expect(r.failed).toHaveLength(1);
+    expect(calls).toContainEqual(['cookies', 'session_only']);
+  });
+
+  it('survives a rejection that is not an Error', async () => {
+    chrome.contentSettings.sound.set = async () => { throw 'plain string'; };
+    const r = await applyContentSettings({ autoplaySound: true });
+    expect(r.failed[0].error).toBe('plain string');
   });
 });
 ```
@@ -433,7 +460,13 @@ export async function applyContentSettings(settings) {
         ok.push(type);
       } catch (e) {
         // `sound` requires Chrome 141+; older builds reject it. Report, don't throw.
-        failed.push({ key: type, error: e.message });
+        // Carry settingKey too: one toggle can drive two types, and the popup
+        // marks the toggle, not the type.
+        failed.push({
+          type,
+          settingKey: key,
+          error: e?.message ?? String(e),
+        });
       }
     }
   }
@@ -820,10 +853,21 @@ async function init() {
   });
 
   const { lastApplyErrors = [] } = await chrome.storage.local.get({ lastApplyErrors: [] });
-  if (lastApplyErrors.length) {
-    document.querySelector('#errors').textContent =
-      `Not enforced by this Chrome version: ${lastApplyErrors.map((e) => e.key).join(', ')}`;
+  markUnenforced(document, lastApplyErrors);
+}
+
+/** Marks the toggles Chrome refused to enforce, by their settingKey. */
+export function markUnenforced(doc, failures = []) {
+  const keys = [...new Set(failures.map((f) => f.settingKey))];
+  if (keys.length === 0) return;
+
+  const all = [...TOGGLE_GROUPS.primary, ...TOGGLE_GROUPS.more];
+  for (const key of keys) {
+    doc.querySelector(`#toggle-${key}`)?.closest('.row')?.classList.add('unenforced');
   }
+  const labels = keys.map((k) => all.find((t) => t.key === k)?.label ?? k);
+  doc.querySelector('#errors').textContent =
+    `This Chrome version can't enforce: ${labels.join(', ')}`;
 }
 
 if (typeof document !== 'undefined' && document.querySelector('#toggles')) init();
