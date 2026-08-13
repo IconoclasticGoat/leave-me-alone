@@ -37,9 +37,34 @@ describe('applyContentSettings', () => {
     expect(calls).toContainEqual(['microphone', 'block']);
   });
 
-  it('reports failures instead of throwing', async () => {
+  it('reports failures instead of throwing, naming both type and toggle', async () => {
     chrome.contentSettings.sound.set = async () => { throw new Error('unsupported'); };
     const r = await applyContentSettings({ autoplaySound: true });
-    expect(r.failed).toEqual([{ key: 'sound', error: 'unsupported' }]);
+    expect(r.failed).toEqual([
+      { type: 'sound', settingKey: 'autoplaySound', error: 'unsupported' },
+    ]);
+  });
+
+  it('names the driving toggle when one of a pair fails', async () => {
+    chrome.contentSettings.camera.set = async () => { throw new Error('nope'); };
+    const r = await applyContentSettings({ cameraMic: true });
+    expect(r.failed).toEqual([
+      { type: 'camera', settingKey: 'cameraMic', error: 'nope' },
+    ]);
+    // microphone still applied — one failure must not abort its partner
+    expect(calls).toContainEqual(['microphone', 'block']);
+  });
+
+  it('keeps applying later map entries after an earlier one fails', async () => {
+    chrome.contentSettings.notifications.set = async () => { throw new Error('x'); };
+    const r = await applyContentSettings({ notifications: true, sessionOnlyCookies: true });
+    expect(r.failed).toHaveLength(1);
+    expect(calls).toContainEqual(['cookies', 'session_only']);
+  });
+
+  it('survives a rejection that is not an Error', async () => {
+    chrome.contentSettings.sound.set = async () => { throw 'plain string'; };
+    const r = await applyContentSettings({ autoplaySound: true });
+    expect(r.failed[0].error).toBe('plain string');
   });
 });

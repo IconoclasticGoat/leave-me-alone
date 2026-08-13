@@ -24,7 +24,7 @@ export async function applyContentSettings(settings) {
         ok.push(type);
       } catch (e) {
         // `sound` requires Chrome 141+; older builds reject it. Report, don't throw.
-        failed.push({ key: type, error: e.message });
+        failed.push({ type, settingKey: key, error: e?.message ?? String(e) });
       }
     }
   }
