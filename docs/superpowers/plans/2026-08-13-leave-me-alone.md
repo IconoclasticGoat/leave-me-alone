@@ -2138,6 +2138,16 @@ describe('looksLikeNewsletter — negatives', () => {
       <input type="email" autocomplete="username"><button>Go</button>`));
     expect(looksLikeNewsletter(el)).toBe(false);
   });
+
+  it('leaves an account signup whose only marketing word is "sign up"', () => {
+    // Phrased to dodge every AUTH_MARKER. It survives because "sign up" is
+    // not a positive signal on its own — the phrase is shared with
+    // registration forms and cannot tell them apart.
+    const el = mount(overlay(`<h2>New here?</h2>
+      <p>Sign up and we'll email you a link to access your account.</p>
+      <input type="email"><button>Continue</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
 });
 
 describe('dismissNewsletter', () => {
@@ -2168,8 +2178,14 @@ Expected: FAIL — cannot resolve module
 ```js
 import { isShown } from '../engine/tools.js';
 
+// Deliberately excludes "sign up" / "signup". Those are the one phrase a
+// newsletter popup and an account-creation overlay genuinely share, so they
+// cannot distinguish the two. Real newsletter popups almost always also say
+// "newsletter", "subscribe", "% off", "discount", or "mailing list"; an
+// overlay whose ONLY marketing signal is "sign up" is indistinguishable from
+// a registration form, and we leave those alone.
 const SUBSCRIBE_WORDS = [
-  'newsletter', 'subscribe', 'sign up', 'signup', 'join our', 'mailing list',
+  'newsletter', 'subscribe', 'join our', 'mailing list',
   '% off', 'discount', 'first order', 'stay in the loop', 'get updates',
 ];
 
