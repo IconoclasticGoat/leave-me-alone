@@ -65,6 +65,34 @@ describe('looksLikeNewsletter — negatives', () => {
     document.body.innerHTML = overlay(`<input type="email"><button>Subscribe</button>`);
     expect(looksLikeNewsletter(document.querySelector('#m'))).toBe(false);
   });
+
+  it('leaves a passwordless magic-link sign-in alone', () => {
+    // All three positive signals present and no password field, yet this is
+    // an auth flow. Dismissing it would break the site's login.
+    const el = mount(overlay(`<h2>Sign up or log in</h2>
+      <p>We'll email you a magic link.</p>
+      <input type="email"><button>Continue</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves an OAuth account overlay alone', () => {
+    const el = mount(overlay(`<h2>Sign up for 10% off</h2>
+      <button>Continue with Google</button>
+      <input type="email"><button>Sign up</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves an overlay offering an existing-account path alone', () => {
+    const el = mount(overlay(`<h2>Join us</h2><input type="email">
+      <button>Sign up</button><a>Already have an account?</a>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves a username-autocomplete field alone', () => {
+    const el = mount(overlay(`<h2>Subscribe</h2>
+      <input type="email" autocomplete="username"><button>Go</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
 });
 
 describe('dismissNewsletter', () => {

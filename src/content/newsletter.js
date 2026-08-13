@@ -10,6 +10,18 @@ const CLOSE_SELECTORS = [
   '[class*="close" i][role="button"]', 'button[data-dismiss]',
 ];
 
+// Overlays that are really account or auth flows. Any of these outweighs
+// every positive signal. A passwordless "magic link" sign-in has an email
+// input, overlay positioning, and "Sign up" copy — all three signals — yet
+// dismissing it breaks the site's login. Missing a newsletter is cheap;
+// destroying an auth flow is not.
+const AUTH_MARKERS = [
+  'sign in', 'signin', 'log in', 'login', 'already have an account',
+  'continue with google', 'continue with apple', 'continue with facebook',
+  'magic link', 'verification code', 'one-time code',
+  'forgot password', 'reset password',
+];
+
 function isOverlay(el) {
   const style = el.ownerDocument.defaultView.getComputedStyle(el);
   if (!['fixed', 'absolute', 'sticky'].includes(style.position)) return false;
@@ -23,15 +35,18 @@ export function looksLikeNewsletter(el) {
 
   // Hard refusals — these are the shapes we must never touch.
   if (el.querySelector('input[type=password]')) return false;
+  if (el.querySelector('input[autocomplete="username"]')) return false;
   const inputs = el.querySelectorAll('input:not([type=hidden]):not([type=submit])');
   if (inputs.length > 2) return false;
+
+  const text = (el.textContent ?? '').toLowerCase();
+  if (AUTH_MARKERS.some((w) => text.includes(w))) return false;
 
   const hasEmail = Boolean(
     el.querySelector('input[type=email], input[name*="email" i], input[placeholder*="email" i]')
   );
   if (!hasEmail) return false;
 
-  const text = (el.textContent ?? '').toLowerCase();
   return SUBSCRIBE_WORDS.some((w) => text.includes(w));
 }
 
