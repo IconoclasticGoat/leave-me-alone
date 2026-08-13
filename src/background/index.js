@@ -6,7 +6,11 @@ async function applyAll() {
   const settings = await getSettings();
   const [cs] = await Promise.all([
     applyContentSettings(settings),
-    applyRulesets(settings),
+    // A ruleset failure must not stop the content-settings error report
+    // below from being written — the popup depends on it.
+    applyRulesets(settings).catch((e) => {
+      console.error('applyRulesets failed', e);
+    }),
   ]);
   // Surfaced by the popup so a toggle can never claim enforcement it didn't get.
   await chrome.storage.local.set({ lastApplyErrors: cs.failed });
