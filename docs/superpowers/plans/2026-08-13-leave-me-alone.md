@@ -83,9 +83,12 @@ describe('manifest', () => {
 
   it('is manifest v3', () => expect(m.manifest_version).toBe(3));
 
-  it('requests exactly the permissions we need', () => {
+  it('requests exactly the permissions we need, and no more', () => {
+    // No `scripting`: content scripts are declared statically and the GPC
+    // injector uses web_accessible_resources, not programmatic injection.
+    // Unused permissions widen the install prompt and draw store-review scrutiny.
     expect(new Set(m.permissions)).toEqual(new Set([
-      'storage', 'contentSettings', 'declarativeNetRequest', 'scripting',
+      'storage', 'contentSettings', 'declarativeNetRequest',
     ]));
   });
 
@@ -135,7 +138,7 @@ Then `npm install`.
   "name": "Leave Me Alone",
   "version": "0.1.0",
   "description": "Necessary cookies only, no notification prompts, no location requests, no newsletter popups.",
-  "permissions": ["storage", "contentSettings", "declarativeNetRequest", "scripting"],
+  "permissions": ["storage", "contentSettings", "declarativeNetRequest"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_popup": "popup/popup.html" },
@@ -452,15 +455,20 @@ git commit -m "feat: contentSettings enforcement layer"
 
 ---
 
-### Task 4: DNR rulesets and service worker
+### Task 4: DNR rulesets, GPC property, and service worker
 
 **Files:**
-- Create: `rules/gpc.json`, `rules/one-tap.json`, `rules/chat-widgets.json`, `src/background/rulesets.js`, `src/background/index.js`
-- Test: `test/rulesets.test.js`
+- Create: `rules/gpc.json`, `rules/one-tap.json`, `rules/chat-widgets.json`, `src/background/rulesets.js`, `src/background/index.js`, `src/content/gpc-inject.js`, `src/content/gpc-main.js`
+- Modify: `manifest.json` (add the GPC injector content script and `web_accessible_resources`)
+- Test: `test/rulesets.test.js`, `test/gpc.test.js`
 
 **Interfaces:**
 - Consumes: `getSettings` from `src/settings.js`, `applyContentSettings` from Task 3.
-- Produces: `RULESET_MAP`, `applyRulesets(settings)`.
+- Produces: `RULESET_MAP`, `applyRulesets(settings)`, `injectGpc(doc, settings)`.
+
+**Why two GPC mechanisms.** The spec requires both the `Sec-GPC` request header and the `navigator.globalPrivacyControl` property — some sites check one, some the other. The header is a DNR rule. The property must be set in the page's MAIN world, which an ISOLATED content script cannot reach directly, so `gpc-inject.js` (ISOLATED, `document_start`) reads the toggle and appends a `<script src=…gpc-main.js>` from `web_accessible_resources`. This needs no `scripting` permission.
+
+**Known caveat, accept it.** Reading `chrome.storage` is async, so the property is set a few milliseconds into page load rather than truly synchronously. Page scripts that read `navigator.globalPrivacyControl` in their very first statement may miss it. Do not try to close this race — the alternatives are a `scripting` permission or an ungated always-on injection, both of which the plan rejected deliberately.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -585,16 +593,114 @@ chrome.storage.onChanged.addListener((_changes, area) => {
 });
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [ ] **Step 6: Write the failing GPC injection test**
 
-Run: `npx vitest run test/rulesets.test.js`
-Expected: PASS (2 tests)
+```js
+// test/gpc.test.js
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach } from 'vitest';
+import { injectGpc } from '../src/content/gpc-inject.js';
 
-- [ ] **Step 7: Commit**
+beforeEach(() => {
+  document.documentElement.innerHTML = '<head></head><body></body>';
+  globalThis.chrome = { runtime: { getURL: (p) => `chrome-extension://abc/${p}` } };
+});
+
+describe('injectGpc', () => {
+  it('appends a MAIN-world script when the toggle is on', () => {
+    injectGpc(document, { gpc: true });
+    const s = document.querySelector('script[src*="gpc-main.js"]');
+    expect(s).not.toBe(null);
+    expect(s.src).toBe('chrome-extension://abc/gpc-main.js');
+  });
+
+  it('injects nothing when the toggle is off', () => {
+    injectGpc(document, { gpc: false });
+    expect(document.querySelector('script[src*="gpc-main.js"]')).toBe(null);
+  });
+
+  it('does not inject twice', () => {
+    injectGpc(document, { gpc: true });
+    injectGpc(document, { gpc: true });
+    expect(document.querySelectorAll('script[src*="gpc-main.js"]')).toHaveLength(1);
+  });
+});
+```
+
+- [ ] **Step 7: Run test to verify it fails**
+
+Run: `npx vitest run test/gpc.test.js`
+Expected: FAIL — cannot resolve `../src/content/gpc-inject.js`
+
+- [ ] **Step 8: Implement the two GPC scripts**
+
+```js
+// src/content/gpc-inject.js — ISOLATED world, document_start
+import { getSettings } from '../settings.js';
+
+const MARKER = 'data-lma-gpc';
+
+export function injectGpc(doc, settings) {
+  if (!settings?.gpc) return null;
+  if (doc.querySelector(`script[${MARKER}]`)) return null;
+
+  const el = doc.createElement('script');
+  el.setAttribute(MARKER, '');
+  el.src = chrome.runtime.getURL('gpc-main.js');
+  // Remove the tag once it has run; the property it sets persists.
+  el.onload = () => el.remove();
+  (doc.head ?? doc.documentElement).appendChild(el);
+  return el;
+}
+
+async function main() {
+  injectGpc(document, await getSettings());
+}
+
+if (typeof chrome !== 'undefined' && chrome.storage) main();
+```
+
+```js
+// src/content/gpc-main.js — runs in the page's MAIN world
+// Standalone by design: bundled as its own entry, no imports.
+try {
+  Object.defineProperty(navigator, 'globalPrivacyControl', {
+    value: true,
+    configurable: false,
+    enumerable: true,
+  });
+} catch {
+  // Another extension may have defined it already. Theirs is equivalent; leave it.
+}
+```
+
+Add to `build.mjs` entryPoints: `'gpc-main': 'src/content/gpc-main.js'`.
+
+Add to `manifest.json`:
+
+```json
+"content_scripts": [
+  { "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle", "all_frames": true },
+  { "matches": ["<all_urls>"], "js": ["gpc-inject.js"], "run_at": "document_start", "all_frames": true }
+],
+"web_accessible_resources": [
+  { "resources": ["gpc-main.js"], "matches": ["<all_urls>"] }
+]
+```
+
+Add to `build.mjs` entryPoints: `'gpc-inject': 'src/content/gpc-inject.js'`.
+
+- [ ] **Step 9: Run tests to verify they pass**
+
+Run: `npx vitest run test/rulesets.test.js test/gpc.test.js`
+Expected: PASS (2 + 3 tests)
+
+- [ ] **Step 10: Commit**
 
 ```bash
-git add rules/ src/background/rulesets.js src/background/index.js test/rulesets.test.js
-git commit -m "feat: DNR rulesets for GPC, one-tap, chat widgets"
+git add rules/ src/background/ src/content/gpc-inject.js src/content/gpc-main.js \
+        manifest.json build.mjs test/rulesets.test.js test/gpc.test.js
+git commit -m "feat: DNR rulesets and GPC signal via header and navigator property"
 ```
 
 ---
@@ -1873,7 +1979,7 @@ git commit -m "feat: cosmetic cookie fallback and scroll restore"
 
 **Interfaces:**
 - Consumes: everything from Tasks 7–12, plus `getSettings`/`isPaused` (Task 2) and the bundle (Task 6).
-- Produces: `createSweeper({ settings, bundle, root })` → `{ sweep(), start(), stop() }`.
+- Produces: `createSweeper({ settings, bundle, root, engine })` → `{ sweep(), start(), stop(), tripped }`. `engine` defaults to `runEngine` and is an explicit constructor dependency, not a mutable property — tests pass a stub through the signature.
 
 Splitting `createSweeper` out from the module's side-effecting entry is what makes the observer loop testable without a browser.
 
@@ -1924,11 +2030,10 @@ describe('sweeper', () => {
   });
 
   it('stops sweeping a domain after two consecutive errors', async () => {
-    const bundle = { rules: {} };
-    const s = createSweeper({ settings: ON, bundle });
-    s._engine = vi.fn(async () => { throw new Error('boom'); });
+    const engine = vi.fn(async () => { throw new Error('boom'); });
+    const s = createSweeper({ settings: ON, bundle: EMPTY_BUNDLE, engine });
     await s.sweep(); await s.sweep(); await s.sweep();
-    expect(s._engine).toHaveBeenCalledTimes(2);
+    expect(engine).toHaveBeenCalledTimes(2);
     expect(s.tripped).toBe(true);
   });
 });
@@ -1953,12 +2058,11 @@ const QUIET_MS = 10_000;
 const DEBOUNCE_MS = 300;
 const MAX_ERRORS = 2;
 
-export function createSweeper({ settings, bundle, root = document }) {
+export function createSweeper({ settings, bundle, root = document, engine = runEngine }) {
   const state = {
     tripped: false,
     errors: 0,
     handled: false,
-    _engine: (b, r) => runEngine(b, r),
 
     async sweep() {
       if (state.tripped) return;
@@ -1966,7 +2070,7 @@ export function createSweeper({ settings, bundle, root = document }) {
 
       if (settings.cookieBanners && !state.handled) {
         try {
-          const r = await state._engine(bundle, root);
+          const r = await engine(bundle, root);
           state.errors = 0;
           if (r.handled) { state.handled = true; didSomething = true; }
           else if (r.reason !== 'no-cmp-detected') {
