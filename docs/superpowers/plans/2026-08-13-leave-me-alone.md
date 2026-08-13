@@ -2139,6 +2139,35 @@ describe('looksLikeNewsletter — negatives', () => {
     expect(looksLikeNewsletter(el)).toBe(false);
   });
 
+  // Each of these carries a REAL SUBSCRIBE_WORDS match, so the only thing
+  // stopping dismissal is the specific refusal named. Remove that refusal and
+  // the test flips — which is what makes it a guard rather than a decoration.
+  it('refuses a password field even when the copy is pure marketing', () => {
+    const el = mount(overlay(`<h2>Subscribe and get 10% off</h2>
+      <input type="email"><input type="password"><button>Go</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('refuses an existing-account link even under newsletter copy', () => {
+    const el = mount(overlay(`<h2>Join our newsletter</h2>
+      <input type="email"><button>Go</button><a>Already have an account?</a>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('refuses a magic link even under newsletter copy', () => {
+    const el = mount(overlay(`<h2>Subscribe for updates</h2>
+      <p>We'll send you a magic link.</p><input type="email">`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('refuses a registration wall that dangles a discount', () => {
+    // The realistic e-commerce pattern: account creation sold with a coupon.
+    const el = mount(overlay(`<h2>Create your free account</h2>
+      <p>Get exclusive discount access.</p>
+      <input type="email"><button>Continue</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
   it('leaves an account signup whose only marketing word is "sign up"', () => {
     // Phrased to dodge every AUTH_MARKER. It survives because "sign up" is
     // not a positive signal on its own — the phrase is shared with
@@ -2199,6 +2228,11 @@ const AUTH_MARKERS = [
   'continue with google', 'continue with apple', 'continue with facebook',
   'magic link', 'verification code', 'one-time code',
   'forgot password', 'reset password',
+  // Registration walls. "Create your free account — get exclusive discount
+  // access" carries a real marketing word and would otherwise be dismissed,
+  // which is the expensive kind of mistake.
+  'create account', 'create an account', 'create your account',
+  'free account', 'your account', 'register',
 ];
 
 const CLOSE_SELECTORS = [
