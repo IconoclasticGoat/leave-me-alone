@@ -75,6 +75,23 @@ describe('consent', () => {
     }]});
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it('prefers falseAction over toggling when both are given', async () => {
+    // The highest-risk ordering in the engine: if toggling won instead,
+    // an already-on category could be double-handled and left enabled.
+    document.body.innerHTML =
+      `<input type="checkbox" id="m" checked><button id="reject">Reject</button>`;
+    const toggle = vi.spyOn(document.querySelector('#m'), 'click');
+    const direct = vi.spyOn(document.querySelector('#reject'), 'click');
+    await run({ type: 'consent', consents: [{
+      type: 'E',
+      falseAction: { type: 'click', target: { selector: '#reject' } },
+      matcher: { type: 'checkbox', target: { selector: '#m' } },
+      toggleAction: { type: 'click', target: { selector: '#m' } },
+    }]});
+    expect(direct).toHaveBeenCalled();
+    expect(toggle).not.toHaveBeenCalled();
+  });
 });
 
 describe('ifcss', () => {
@@ -126,5 +143,58 @@ describe('ifallownone', () => {
 describe('unsupported', () => {
   it('throws UnsupportedAction for slide', async () => {
     await expect(run({ type: 'slide' })).rejects.toBeInstanceOf(UnsupportedAction);
+  });
+});
+
+describe('wait and close', () => {
+  it('wait resolves after its configured delay', async () => {
+    const t0 = Date.now();
+    await run({ type: 'wait', waitTime: 30 });
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(25);
+  });
+
+  it('close calls the global close', async () => {
+    const spy = vi.fn();
+    const original = globalThis.close;
+    globalThis.close = spy;
+    await run({ type: 'close' });
+    globalThis.close = original;
+    expect(spy).toHaveBeenCalled();
+  });
+});
+
+describe('waitcss', () => {
+  it('resolves once the selector appears', async () => {
+    document.body.innerHTML = ``;
+    setTimeout(() => { document.body.innerHTML = `<div id="late">here</div>`; }, 20);
+    await run({ type: 'waitcss', target: { selector: '#late' }, timeout: 500 });
+    expect(document.querySelector('#late')).not.toBe(null);
+  });
+
+  it('gives up at the timeout instead of hanging', async () => {
+    document.body.innerHTML = ``;
+    const t0 = Date.now();
+    await run({ type: 'waitcss', target: { selector: '#never' }, timeout: 60 });
+    expect(Date.now() - t0).toBeLessThan(2000);
+  });
+
+  it('waits for absence when negated', async () => {
+    document.body.innerHTML = `<div id="going">x</div>`;
+    setTimeout(() => { document.querySelector('#going').remove(); }, 20);
+    await run({ type: 'waitcss', target: { selector: '#going' }, negated: true, timeout: 500 });
+    expect(document.querySelector('#going')).toBe(null);
+  });
+});
+
+describe('ifallowall', () => {
+  it('takes the false branch, because nothing is ever allowed', async () => {
+    document.body.innerHTML = `<button id="t">t</button><button id="f">f</button>`;
+    const t = vi.spyOn(document.querySelector('#t'), 'click');
+    const f = vi.spyOn(document.querySelector('#f'), 'click');
+    await run({ type: 'ifallowall',
+      trueAction: { type: 'click', target: { selector: '#t' } },
+      falseAction: { type: 'click', target: { selector: '#f' } } });
+    expect(f).toHaveBeenCalled();
+    expect(t).not.toHaveBeenCalled();
   });
 });
