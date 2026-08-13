@@ -1170,6 +1170,64 @@ describe('waitFor', () => {
     setTimeout(() => { v = 'ready'; }, 10);
     expect(await waitFor(() => v, 500)).toBe('ready');
   });
+  it('treats a throwing predicate as not-ready, never rejecting', async () => {
+    expect(await waitFor(() => { throw new Error('boom'); }, 30)).toBe(null);
+  });
+});
+
+// These are the page-safety guarantees. They are the reason this layer
+// exists in the shape it does, so they get explicit tests.
+describe('queryAll never throws into the page', () => {
+  it('returns [] for a malformed selector', () => {
+    document.body.innerHTML = `<div>x</div>`;
+    expect(queryAll(document, { selector: '[unclosed' })).toEqual([]);
+    expect(queryAll(document, { selector: ':::bad' })).toEqual([]);
+  });
+
+  it('returns [] when an element throws during filtering', () => {
+    document.body.innerHTML = `<div id="a">x</div>`;
+    const el = document.querySelector('#a');
+    // Simulates a node whose document lost its browsing context.
+    Object.defineProperty(el, 'ownerDocument', {
+      get() { throw new Error('detached'); },
+    });
+    expect(queryAll(document, { selector: '#a', displayFilter: true })).toEqual([]);
+  });
+
+  it('applies displayFilter, excluding hidden elements', () => {
+    document.body.innerHTML =
+      `<div class="c" id="v">shown</div><div class="c" style="display:none">hidden</div>`;
+    document.querySelector('#v').getBoundingClientRect = () => ({ width: 10, height: 10 });
+    const r = queryAll(document, { selector: '.c', displayFilter: true });
+    expect(r).toHaveLength(1);
+    expect(r[0].id).toBe('v');
+  });
+
+  it('applies childFilter, requiring a descendant match', () => {
+    document.body.innerHTML =
+      `<div class="row" id="has"><input type="checkbox"></div>` +
+      `<div class="row" id="lacks"><span>no input</span></div>`;
+    const r = queryAll(document, { selector: '.row', childFilter: { selector: 'input' } });
+    expect(r).toHaveLength(1);
+    expect(r[0].id).toBe('has');
+  });
+});
+
+describe('isShown on a detached document', () => {
+  it('is false rather than throwing when defaultView is null', () => {
+    document.body.innerHTML = `<div id="a">x</div>`;
+    const el = document.querySelector('#a');
+    Object.defineProperty(el, 'ownerDocument', { get: () => ({ defaultView: null }) });
+    expect(() => isShown(el)).not.toThrow();
+    expect(isShown(el)).toBe(false);
+  });
+});
+
+describe('matchesText with malformed rule data', () => {
+  it('accepts a bare string where an array was expected', () => {
+    document.body.innerHTML = `<button>Reject all</button>`;
+    expect(matchesText(document.querySelector('button'), 'reject')).toBe(true);
+  });
 });
 ```
 
@@ -1185,39 +1243,55 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function isShown(el) {
   if (!el || !el.isConnected) return false;
-  const style = el.ownerDocument.defaultView.getComputedStyle(el);
+  // isConnected stays true for nodes inside a DETACHED iframe's document,
+  // but that document's defaultView is null once its browsing context is
+  // discarded. Consent UIs live in iframes constantly, so reading
+  // ownerDocument.defaultView unguarded throws on a routine case.
+  const view = el.ownerDocument?.defaultView;
+  if (!view) return false;
+
+  const style = view.getComputedStyle(el);
   if (style.display === 'none' || style.visibility === 'hidden') return false;
-  if (style.opacity === '0') return false;
+  if (style.opacity === '0') return false; // computed opacity normalizes to a string
   const rect = el.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
 }
 
 export function matchesText(el, filters) {
-  if (!filters || filters.length === 0) return true;
+  // Vendored rules occasionally carry a bare string where an array belongs.
+  const list = Array.isArray(filters) ? filters : filters == null ? [] : [filters];
+  if (list.length === 0) return true;
   const text = (el.textContent ?? '').trim().toLowerCase();
-  return filters.some((f) => text.includes(String(f).trim().toLowerCase()));
+  return list.some((f) => text.includes(String(f).trim().toLowerCase()));
 }
 
 export function queryAll(root, target) {
   if (!target?.selector) return [];
-  let els;
   try {
-    els = Array.from((root ?? document).querySelectorAll(target.selector));
+    let els = Array.from((root ?? document).querySelectorAll(target.selector));
+    if (target.textFilter) els = els.filter((el) => matchesText(el, target.textFilter));
+    if (target.displayFilter) els = els.filter((el) => isShown(el));
+    if (target.childFilter) {
+      els = els.filter((el) => queryAll(el, target.childFilter).length > 0);
+    }
+    return els;
   } catch {
-    return []; // malformed selector in a rule must never throw into the page
+    // The guard covers the WHOLE pipeline, not just the selector: a detached
+    // document, odd rule data, or a hostile getter must never throw into the
+    // host page. Returning [] degrades to "found nothing".
+    return [];
   }
-  if (target.textFilter) els = els.filter((el) => matchesText(el, target.textFilter));
-  if (target.displayFilter) els = els.filter((el) => isShown(el));
-  if (target.childFilter) {
-    els = els.filter((el) => queryAll(el, target.childFilter).length > 0);
-  }
-  return els;
 }
 
 export async function waitFor(fn, timeoutMs = 2000, intervalMs = 50) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const v = fn();
+    let v = null;
+    try {
+      v = fn();
+    } catch {
+      v = null; // a throwing predicate is "not ready", never an escaping rejection
+    }
     if (v) return v;
     if (Date.now() >= deadline) return null;
     await sleep(intervalMs);
