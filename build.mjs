@@ -8,6 +8,8 @@ await esbuild.build({
     background: 'src/background/index.js',
     content: 'src/content/index.js',
     'popup/popup': 'popup/popup.js',
+    'gpc-inject': 'src/content/gpc-inject.js',
+    'gpc-main': 'src/content/gpc-main.js',
   },
   bundle: true,
   format: 'esm',

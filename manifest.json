@@ -7,12 +7,13 @@
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_popup": "popup/popup.html" },
-  "content_scripts": [{
-    "matches": ["<all_urls>"],
-    "js": ["content.js"],
-    "run_at": "document_idle",
-    "all_frames": true
-  }],
+  "content_scripts": [
+    { "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle", "all_frames": true },
+    { "matches": ["<all_urls>"], "js": ["gpc-inject.js"], "run_at": "document_start", "all_frames": true }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["gpc-main.js"], "matches": ["<all_urls>"] }
+  ],
   "declarative_net_request": {
     "rule_resources": [
       { "id": "gpc", "enabled": false, "path": "rules/gpc.json" },

@@ -1,0 +1,7 @@
+[{
+  "id": 1, "priority": 1, "action": { "type": "block" },
+  "condition": {
+    "requestDomains": ["widget.intercom.io", "js.driftt.com", "static.zdassets.com", "widget-mediator.zopim.com"],
+    "resourceTypes": ["script", "xmlhttprequest", "sub_frame"]
+  }
+}]
