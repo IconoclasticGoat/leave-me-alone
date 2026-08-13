@@ -26,6 +26,11 @@ const AUTH_MARKERS = [
   'continue with google', 'continue with apple', 'continue with facebook',
   'magic link', 'verification code', 'one-time code',
   'forgot password', 'reset password',
+  // Registration walls. "Create your free account — get exclusive discount
+  // access" carries a real marketing word and would otherwise be dismissed,
+  // which is the expensive kind of mistake.
+  'create account', 'create an account', 'create your account',
+  'free account', 'your account', 'register',
 ];
 
 function isOverlay(el) {

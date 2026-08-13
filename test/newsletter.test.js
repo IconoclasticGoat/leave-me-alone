@@ -103,6 +103,35 @@ describe('looksLikeNewsletter — negatives', () => {
       <input type="email"><button>Continue</button>`));
     expect(looksLikeNewsletter(el)).toBe(false);
   });
+
+  // Each of these carries a REAL SUBSCRIBE_WORDS match, so the only thing
+  // stopping dismissal is the specific refusal named. Remove that refusal and
+  // the test flips — which is what makes it a guard rather than a decoration.
+  it('refuses a password field even when the copy is pure marketing', () => {
+    const el = mount(overlay(`<h2>Subscribe and get 10% off</h2>
+      <input type="email"><input type="password"><button>Go</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('refuses an existing-account link even under newsletter copy', () => {
+    const el = mount(overlay(`<h2>Join our newsletter</h2>
+      <input type="email"><button>Go</button><a>Already have an account?</a>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('refuses a magic link even under newsletter copy', () => {
+    const el = mount(overlay(`<h2>Subscribe for updates</h2>
+      <p>We'll send you a magic link.</p><input type="email">`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('refuses a registration wall that dangles a discount', () => {
+    // The realistic e-commerce pattern: account creation sold with a coupon.
+    const el = mount(overlay(`<h2>Create your free account</h2>
+      <p>Get exclusive discount access.</p>
+      <input type="email"><button>Continue</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
 });
 
 describe('dismissNewsletter', () => {
