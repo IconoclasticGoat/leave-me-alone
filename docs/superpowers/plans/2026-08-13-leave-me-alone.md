@@ -835,6 +835,42 @@ describe('popup', () => {
     expect(el.querySelector('#toggle-notifications').checked).toBe(false);
   });
 });
+
+describe('markUnenforced', () => {
+  const mount = () => {
+    document.body.innerHTML = '<div id="toggles"></div><p id="errors"></p>';
+    renderToggles(document.querySelector('#toggles'), {});
+    return document;
+  };
+
+  it('collapses two failures from one toggle into a single label', () => {
+    const doc = mount();
+    // cameraMic drives both camera and microphone; the user has one switch.
+    markUnenforced(doc, [
+      { type: 'camera', settingKey: 'cameraMic', error: 'x' },
+      { type: 'microphone', settingKey: 'cameraMic', error: 'x' },
+    ]);
+    const text = doc.querySelector('#errors').textContent;
+    expect(text).toContain('Block camera & microphone prompts');
+    expect(text.match(/camera/gi)).toHaveLength(1);
+  });
+
+  it('marks the row of the toggle that failed', () => {
+    const doc = mount();
+    markUnenforced(doc, [{ type: 'sound', settingKey: 'autoplaySound', error: 'x' }]);
+    const row = doc.querySelector('#toggle-autoplaySound').closest('.row');
+    expect(row.classList.contains('unenforced')).toBe(true);
+    expect(doc.querySelector('#toggle-notifications').closest('.row')
+      .classList.contains('unenforced')).toBe(false);
+  });
+
+  it('says nothing when everything applied', () => {
+    const doc = mount();
+    markUnenforced(doc, []);
+    expect(doc.querySelector('#errors').textContent).toBe('');
+    expect(doc.querySelectorAll('.unenforced')).toHaveLength(0);
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -950,6 +986,8 @@ if (typeof document !== 'undefined' && document.querySelector('#toggles')) init(
 - [ ] **Step 5: Create popup/popup.css**
 
 Minimal: `width: 300px`, system font stack, `.row { display: grid; grid-template-columns: auto 1fr; gap: .5rem; align-items: center; }`, `.more { border-top: 1px solid #ddd; margin-top: .75rem; padding-top: .75rem; }`, `.warning { grid-column: 2; color: #a33; font-size: .75rem; }`, `.errors:empty { display: none; }`.
+
+Also `.unenforced { opacity: .55; }` — `markUnenforced` adds that class to rows Chrome refused to apply, and without a rule for it the marking is invisible and the class is dead code.
 
 - [ ] **Step 6: Run test to verify it passes**
 
