@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Leave Me Alone",
+  "version": "0.1.0",
+  "description": "Necessary cookies only, no notification prompts, no location requests, no newsletter popups.",
+  "permissions": ["storage", "contentSettings", "declarativeNetRequest"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup/popup.html" },
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content.js"],
+    "run_at": "document_idle",
+    "all_frames": true
+  }],
+  "declarative_net_request": {
+    "rule_resources": [
+      { "id": "gpc", "enabled": false, "path": "rules/gpc.json" },
+      { "id": "one-tap", "enabled": false, "path": "rules/one-tap.json" },
+      { "id": "chat-widgets", "enabled": false, "path": "rules/chat-widgets.json" }
+    ]
+  }
+}
