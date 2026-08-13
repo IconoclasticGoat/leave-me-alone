@@ -48,4 +48,62 @@ describe('waitFor', () => {
     setTimeout(() => { v = 'ready'; }, 10);
     expect(await waitFor(() => v, 500)).toBe('ready');
   });
+  it('treats a throwing predicate as not-ready, never rejecting', async () => {
+    expect(await waitFor(() => { throw new Error('boom'); }, 30)).toBe(null);
+  });
+});
+
+// These are the page-safety guarantees. They are the reason this layer
+// exists in the shape it does, so they get explicit tests.
+describe('queryAll never throws into the page', () => {
+  it('returns [] for a malformed selector', () => {
+    document.body.innerHTML = `<div>x</div>`;
+    expect(queryAll(document, { selector: '[unclosed' })).toEqual([]);
+    expect(queryAll(document, { selector: ':::bad' })).toEqual([]);
+  });
+
+  it('returns [] when an element throws during filtering', () => {
+    document.body.innerHTML = `<div id="a">x</div>`;
+    const el = document.querySelector('#a');
+    // Simulates a node whose document lost its browsing context.
+    Object.defineProperty(el, 'ownerDocument', {
+      get() { throw new Error('detached'); },
+    });
+    expect(queryAll(document, { selector: '#a', displayFilter: true })).toEqual([]);
+  });
+
+  it('applies displayFilter, excluding hidden elements', () => {
+    document.body.innerHTML =
+      `<div class="c" id="v">shown</div><div class="c" style="display:none">hidden</div>`;
+    document.querySelector('#v').getBoundingClientRect = () => ({ width: 10, height: 10 });
+    const r = queryAll(document, { selector: '.c', displayFilter: true });
+    expect(r).toHaveLength(1);
+    expect(r[0].id).toBe('v');
+  });
+
+  it('applies childFilter, requiring a descendant match', () => {
+    document.body.innerHTML =
+      `<div class="row" id="has"><input type="checkbox"></div>` +
+      `<div class="row" id="lacks"><span>no input</span></div>`;
+    const r = queryAll(document, { selector: '.row', childFilter: { selector: 'input' } });
+    expect(r).toHaveLength(1);
+    expect(r[0].id).toBe('has');
+  });
+});
+
+describe('isShown on a detached document', () => {
+  it('is false rather than throwing when defaultView is null', () => {
+    document.body.innerHTML = `<div id="a">x</div>`;
+    const el = document.querySelector('#a');
+    Object.defineProperty(el, 'ownerDocument', { get: () => ({ defaultView: null }) });
+    expect(() => isShown(el)).not.toThrow();
+    expect(isShown(el)).toBe(false);
+  });
+});
+
+describe('matchesText with malformed rule data', () => {
+  it('accepts a bare string where an array was expected', () => {
+    document.body.innerHTML = `<button>Reject all</button>`;
+    expect(matchesText(document.querySelector('button'), 'reject')).toBe(true);
+  });
 });
