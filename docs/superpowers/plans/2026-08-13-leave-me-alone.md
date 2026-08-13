@@ -1329,7 +1329,7 @@ git commit -m "feat: engine DOM helpers"
 // test/matchers.test.js
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { createMatcher } from '../src/engine/matchers.js';
+import { createMatcher, matchesAll } from '../src/engine/matchers.js';
 
 describe('createMatcher', () => {
   it('css matches when the selector hits', () => {
@@ -1358,6 +1358,70 @@ describe('createMatcher', () => {
 
   it('unknown matcher types are false, never thrown', () => {
     expect(createMatcher({ type: 'nonsense' }).matches(document)).toBe(false);
+    expect(createMatcher(null).matches(document)).toBe(false);
+    expect(createMatcher({ type: 'css' }).matches(document)).toBe(false); // no target
+  });
+
+  it('reads on/off from a data-checked attribute', () => {
+    document.body.innerHTML = `<div id="t" data-checked="true"></div>`;
+    expect(createMatcher({ type: 'onoff', target: { selector: '#t' } })
+      .matches(document)).toBe(true);
+    document.querySelector('#t').setAttribute('data-checked', 'false');
+    expect(createMatcher({ type: 'onoff', target: { selector: '#t' } })
+      .matches(document)).toBe(false);
+  });
+
+  it('reads on/off from a class name when nothing else is present', () => {
+    document.body.innerHTML = `<div id="on" class="checked"></div><div id="off"></div>`;
+    const m = (sel) => createMatcher({ type: 'checkbox', target: { selector: sel } })
+      .matches(document);
+    expect(m('#on')).toBe(true);
+    expect(m('#off')).toBe(false);
+  });
+});
+
+describe('url matcher', () => {
+  it('matches the current href', () => {
+    // jsdom's default location is http://localhost:3000/
+    expect(createMatcher({ type: 'url', target: { regex: 'localhost' } })
+      .matches(document)).toBe(true);
+    expect(createMatcher({ type: 'url', target: { regex: 'example\\.com' } })
+      .matches(document)).toBe(false);
+  });
+
+  it('returns false rather than throwing on a malformed pattern', () => {
+    const m = createMatcher({ type: 'url', target: { regex: '[' } });
+    expect(() => m.matches(document)).not.toThrow();
+    expect(m.matches(document)).toBe(false);
+  });
+
+  it('one malformed pattern does not void a valid sibling', () => {
+    const m = createMatcher({ type: 'url', target: { urlFilter: ['[', 'localhost'] } });
+    expect(m.matches(document)).toBe(true);
+  });
+});
+
+describe('matchesAll', () => {
+  it('is false for an empty list — a detector with no matchers matches nothing', () => {
+    expect(matchesAll([], document)).toBe(false);
+  });
+
+  it('accepts a single config that is not wrapped in an array', () => {
+    document.body.innerHTML = `<div id="b"></div>`;
+    expect(matchesAll({ type: 'css', target: { selector: '#b' } }, document)).toBe(true);
+  });
+
+  it('requires every config to match', () => {
+    document.body.innerHTML = `<div id="a"></div>`;
+    const present = { type: 'css', target: { selector: '#a' } };
+    const absent = { type: 'css', target: { selector: '#nope' } };
+    expect(matchesAll([present, present], document)).toBe(true);
+    expect(matchesAll([present, absent], document)).toBe(false);
+  });
+
+  it('survives a matcher that throws', () => {
+    document.body.innerHTML = `<div id="a"></div>`;
+    expect(matchesAll([{ type: 'url', target: { regex: '(' } }], document)).toBe(false);
   });
 });
 ```
@@ -1384,28 +1448,31 @@ function readOnOff(el) {
   return el.classList.contains('checked') || el.classList.contains('active');
 }
 
+// checkbox and onoff are the same question asked twice by the DSL.
+const readState = (c) => ({
+  matches: (root) => {
+    const el = queryAll(root, c.target)[0];
+    return el ? readOnOff(el) : false;
+  },
+});
+
 const TYPES = {
   css: (c) => ({ matches: (root) => queryAll(root, c.target).length > 0 }),
 
-  checkbox: (c) => ({
-    matches: (root) => {
-      const el = queryAll(root, c.target)[0];
-      return el ? readOnOff(el) : false;
-    },
-  }),
-
-  onoff: (c) => ({
-    matches: (root) => {
-      const el = queryAll(root, c.target)[0];
-      return el ? readOnOff(el) : false;
-    },
-  }),
+  checkbox: readState,
+  onoff: readState,
 
   url: (c) => ({
     matches: () => {
       const filters = c.target?.regex ? [c.target.regex] : (c.target?.urlFilter ?? []);
       const href = globalThis.location?.href ?? '';
-      return filters.some((f) => new RegExp(f).test(href));
+      return filters.some((f) => {
+        try {
+          return new RegExp(f).test(href);
+        } catch {
+          return false; // one malformed pattern must not void the others
+        }
+      });
     },
   }),
 };
@@ -1413,11 +1480,27 @@ const TYPES = {
 export function createMatcher(config) {
   const make = TYPES[config?.type];
   if (!make) return { matches: () => false };
+
+  let inner;
   try {
-    return make(config);
+    inner = make(config);
   } catch {
     return { matches: () => false };
   }
+
+  // The guard must wrap EVALUATION, not just construction. Every matcher
+  // body runs against untrusted rule data at match time — long after
+  // createMatcher returned — so guarding only `make(config)` protects
+  // nothing: for every type here, make() just returns an object literal.
+  return {
+    matches(root) {
+      try {
+        return Boolean(inner.matches(root));
+      } catch {
+        return false;
+      }
+    },
+  };
 }
 
 export function matchesAll(configs, root) {
