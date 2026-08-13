@@ -2572,11 +2572,13 @@ export function createSweeper({ settings, bundle, root = document, engine = runE
         try {
           const r = await engine(bundle, root);
           state.errors = 0;
-          if (r.handled) { state.handled = true; didSomething = true; }
-          else if (r.reason !== 'no-cmp-detected') {
-            // Rule matched but could not complete — fall back to hiding.
-            didSomething = hideCookieBanners(root) > 0;
+          if (r.handled) {
+            state.handled = true;
+            didSomething = true;
           } else {
+            // Either no rule matched, or one matched but hit an action we
+            // don't implement. Both fall back to hiding — and note the
+            // fallback runs ONLY here, never alongside a successful rule.
             didSomething = hideCookieBanners(root) > 0;
           }
         } catch {
