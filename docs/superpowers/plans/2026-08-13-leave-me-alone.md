@@ -24,6 +24,7 @@
 ```
 manifest.json              MV3 manifest
 package.json               scripts: build, test, bundle-rules
+build.config.mjs           entry groups: iife for content scripts, esm for the rest
 build.mjs                  esbuild bundling
 scripts/bundle-rules.mjs   fetch + merge Consent-O-Matic rules -> src/rules/bundle.json
 
@@ -158,32 +159,63 @@ Then `npm install`.
 }
 ```
 
-- [ ] **Step 5: Create build.mjs**
+- [ ] **Step 5: Create build.config.mjs**
+
+The output format is not uniform, and getting it wrong fails silently in the browser while every unit test still passes. Content scripts are injected as **classic scripts** — MV3 has no `"type": "module"` for `content_scripts` entries — so a top-level `export` in those bundles is a `SyntaxError` that kills the whole file. The service worker (`"type": "module"`) and the popup (`<script type="module">`) both load ESM natively.
+
+Keeping the two groups in their own file lets a test assert the formats never drift.
+
+```js
+// build.config.mjs
+export const SHARED = {
+  bundle: true,
+  target: 'chrome120',
+  outdir: 'dist',
+  loader: { '.json': 'json' },
+};
+
+// Injected into pages as classic scripts. MUST be iife — a top-level
+// `export` here is a SyntaxError that silently disables the whole script.
+export const CONTENT_BUILD = {
+  ...SHARED,
+  format: 'iife',
+  entryPoints: {
+    content: 'src/content/index.js',
+    'gpc-inject': 'src/content/gpc-inject.js',
+    'gpc-main': 'src/content/gpc-main.js',
+  },
+};
+
+// Loaded as real modules by Chrome; ESM is correct here.
+export const MODULE_BUILD = {
+  ...SHARED,
+  format: 'esm',
+  entryPoints: {
+    background: 'src/background/index.js',
+    'popup/popup': 'popup/popup.js',
+  },
+};
+```
+
+Create `build.mjs`:
 
 ```js
 import * as esbuild from 'esbuild';
 import { cpSync, mkdirSync } from 'node:fs';
+import { CONTENT_BUILD, MODULE_BUILD } from './build.config.mjs';
 
 mkdirSync('dist', { recursive: true });
 
-await esbuild.build({
-  entryPoints: {
-    background: 'src/background/index.js',
-    content: 'src/content/index.js',
-    'popup/popup': 'popup/popup.js',
-  },
-  bundle: true,
-  format: 'esm',
-  target: 'chrome120',
-  outdir: 'dist',
-  loader: { '.json': 'json' },
-});
+await esbuild.build(CONTENT_BUILD);
+await esbuild.build(MODULE_BUILD);
 
 for (const f of ['manifest.json', 'rules', 'popup/popup.html', 'popup/popup.css']) {
   cpSync(f, `dist/${f}`, { recursive: true });
 }
 console.log('built dist/');
 ```
+
+Note: the `content`, `gpc-inject`, `gpc-main`, and `popup/popup` entries name files that Tasks 4, 5, and 13 create. `npm run build` will not succeed until Task 13. That is expected — do not create stubs.
 
 - [ ] **Step 6: Create .gitignore and THIRD_PARTY.md**
 
@@ -707,7 +739,7 @@ try {
 }
 ```
 
-Add to `build.mjs` entryPoints: `'gpc-main': 'src/content/gpc-main.js'`.
+Both GPC entry points are already declared in `build.config.mjs`'s `CONTENT_BUILD` from Task 1, so no build change is needed here — verify they are present and in the `iife` group, not the `esm` one.
 
 Add to `manifest.json`:
 
@@ -721,18 +753,47 @@ Add to `manifest.json`:
 ]
 ```
 
-Add to `build.mjs` entryPoints: `'gpc-inject': 'src/content/gpc-inject.js'`.
+- [ ] **Step 9: Write the bundle-format guard test**
 
-- [ ] **Step 9: Run tests to verify they pass**
+This is the test that would have caught the format bug. It builds the real content-script config and asserts the output is loadable as a classic script.
 
-Run: `npx vitest run test/rulesets.test.js test/gpc.test.js`
-Expected: PASS (2 + 3 tests)
+```js
+// test/bundle-format.test.js
+import * as esbuild from 'esbuild';
+import { describe, it, expect } from 'vitest';
+import { CONTENT_BUILD, MODULE_BUILD } from '../build.config.mjs';
 
-- [ ] **Step 10: Commit**
+describe('bundle formats', () => {
+  it('builds content scripts as iife, never esm', () => {
+    expect(CONTENT_BUILD.format).toBe('iife');
+    expect(MODULE_BUILD.format).toBe('esm');
+  });
+
+  it('emits no top-level export in a content-script bundle', async () => {
+    // MV3 content_scripts have no "type": "module" — a top-level export
+    // is a SyntaxError that silently disables the entire script.
+    const r = await esbuild.build({
+      ...CONTENT_BUILD,
+      entryPoints: ['src/content/gpc-inject.js'],
+      outdir: undefined,
+      write: false,
+    });
+    expect(r.outputFiles[0].text).not.toMatch(/^export[\s{]/m);
+  });
+});
+```
+
+- [ ] **Step 10: Run tests to verify they pass**
+
+Run: `npx vitest run test/rulesets.test.js test/gpc.test.js test/bundle-format.test.js`
+Expected: PASS (2 + 3 + 2 tests)
+
+- [ ] **Step 11: Commit**
 
 ```bash
 git add rules/ src/background/ src/content/gpc-inject.js src/content/gpc-main.js \
-        manifest.json build.mjs test/rulesets.test.js test/gpc.test.js
+        manifest.json build.config.mjs build.mjs \
+        test/rulesets.test.js test/gpc.test.js test/bundle-format.test.js
 git commit -m "feat: DNR rulesets and GPC signal via header and navigator property"
 ```
 
