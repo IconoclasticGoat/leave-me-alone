@@ -2110,6 +2110,34 @@ describe('looksLikeNewsletter — negatives', () => {
     document.body.innerHTML = overlay(`<input type="email"><button>Subscribe</button>`);
     expect(looksLikeNewsletter(document.querySelector('#m'))).toBe(false);
   });
+
+  it('leaves a passwordless magic-link sign-in alone', () => {
+    // All three positive signals present and no password field, yet this is
+    // an auth flow. Dismissing it would break the site's login.
+    const el = mount(overlay(`<h2>Sign up or log in</h2>
+      <p>We'll email you a magic link.</p>
+      <input type="email"><button>Continue</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves an OAuth account overlay alone', () => {
+    const el = mount(overlay(`<h2>Sign up for 10% off</h2>
+      <button>Continue with Google</button>
+      <input type="email"><button>Sign up</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves an overlay offering an existing-account path alone', () => {
+    const el = mount(overlay(`<h2>Join us</h2><input type="email">
+      <button>Sign up</button><a>Already have an account?</a>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves a username-autocomplete field alone', () => {
+    const el = mount(overlay(`<h2>Subscribe</h2>
+      <input type="email" autocomplete="username"><button>Go</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
 });
 
 describe('dismissNewsletter', () => {
@@ -2145,6 +2173,18 @@ const SUBSCRIBE_WORDS = [
   '% off', 'discount', 'first order', 'stay in the loop', 'get updates',
 ];
 
+// Overlays that are really account or auth flows. Any of these outweighs
+// every positive signal. A passwordless "magic link" sign-in has an email
+// input, overlay positioning, and "Sign up" copy — all three signals — yet
+// dismissing it breaks the site's login. Missing a newsletter is cheap;
+// destroying an auth flow is not.
+const AUTH_MARKERS = [
+  'sign in', 'signin', 'log in', 'login', 'already have an account',
+  'continue with google', 'continue with apple', 'continue with facebook',
+  'magic link', 'verification code', 'one-time code',
+  'forgot password', 'reset password',
+];
+
 const CLOSE_SELECTORS = [
   '[aria-label*="close" i]', '[title*="close" i]', 'button.close', '.modal-close',
   '[class*="close" i][role="button"]', 'button[data-dismiss]',
@@ -2163,15 +2203,18 @@ export function looksLikeNewsletter(el) {
 
   // Hard refusals — these are the shapes we must never touch.
   if (el.querySelector('input[type=password]')) return false;
+  if (el.querySelector('input[autocomplete="username"]')) return false;
   const inputs = el.querySelectorAll('input:not([type=hidden]):not([type=submit])');
   if (inputs.length > 2) return false;
+
+  const text = (el.textContent ?? '').toLowerCase();
+  if (AUTH_MARKERS.some((w) => text.includes(w))) return false;
 
   const hasEmail = Boolean(
     el.querySelector('input[type=email], input[name*="email" i], input[placeholder*="email" i]')
   );
   if (!hasEmail) return false;
 
-  const text = (el.textContent ?? '').toLowerCase();
   return SUBSCRIBE_WORDS.some((w) => text.includes(w));
 }
 
