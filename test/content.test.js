@@ -47,4 +47,37 @@ describe('sweeper', () => {
     expect(engine).toHaveBeenCalledTimes(2);
     expect(s.tripped).toBe(true);
   });
+
+  // This pair is the guard for the engine/fallback exclusivity. Same fixture,
+  // opposite engine results, opposite outcomes — neither test means anything
+  // without the other, and together they fail if the branches are merged.
+  it('falls back to hiding when the engine found nothing', async () => {
+    mount(`<div id="b" style="position:fixed;z-index:500">
+      We use cookies. <button>Accept</button></div>`);
+    const engine = vi.fn(async () => ({ handled: null, reason: 'no-cmp-detected' }));
+    await createSweeper({ settings: ON, bundle: EMPTY_BUNDLE, engine }).sweep();
+    expect(document.querySelector('#b').style.display).toBe('none');
+  });
+
+  it('does not also hide banners when the engine handled one', async () => {
+    mount(`<div id="b" style="position:fixed;z-index:500">
+      We use cookies. <button>Accept</button></div>`);
+    const engine = vi.fn(async () => ({ handled: 'somecmp', reason: 'ok' }));
+    await createSweeper({ settings: ON, bundle: EMPTY_BUNDLE, engine }).sweep();
+    expect(document.querySelector('#b').style.display).toBe('');
+  });
+
+  it('survives a newsletter scan that throws', async () => {
+    mount(`<div id="x">ordinary</div>`);
+    const engine = vi.fn(async () => ({ handled: null, reason: 'no-cmp-detected' }));
+    const boom = () => { throw new Error('hostile DOM'); };
+    const original = document.querySelectorAll;
+    document.querySelectorAll = boom;
+    const s = createSweeper({ settings: ON, bundle: EMPTY_BUNDLE, engine });
+    try {
+      await expect(s.sweep()).resolves.toBeUndefined();
+    } finally {
+      document.querySelectorAll = original;
+    }
+  });
 });

@@ -39,12 +39,18 @@ export function createSweeper({ settings, bundle, root = document, engine = runE
       }
 
       if (settings.newsletters) {
-        for (const el of findNewsletterModals(root)) {
-          try { dismissNewsletter(el); didSomething = true; } catch { /* never break the page */ }
-        }
+        try {
+          for (const el of findNewsletterModals(root)) {
+            try { dismissNewsletter(el); didSomething = true; } catch { /* never break the page */ }
+          }
+        } catch { /* a hostile DOM must not escape the sweep */ }
       }
 
-      if (didSomething) restoreScroll(root.ownerDocument ?? document);
+      if (didSomething) {
+        try {
+          restoreScroll(root.ownerDocument ?? document);
+        } catch { /* nothing here is worth breaking a page for */ }
+      }
     },
 
     start() {
