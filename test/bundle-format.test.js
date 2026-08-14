@@ -19,4 +19,18 @@ describe('bundle formats', () => {
     });
     expect(r.outputFiles[0].text).not.toMatch(/^export[\s{]/m);
   });
+
+  it('emits no top-level export in the main content script bundle', async () => {
+    // src/content/index.js is the main content script — it exports
+    // createSweeper for testability, but that export must not survive into
+    // the iife bundle actually injected into pages. Its silent death would
+    // disable the entire product on every site.
+    const r = await esbuild.build({
+      ...CONTENT_BUILD,
+      entryPoints: ['src/content/index.js'],
+      outdir: undefined,
+      write: false,
+    });
+    expect(r.outputFiles[0].text).not.toMatch(/^export[\s{]/m);
+  });
 });
