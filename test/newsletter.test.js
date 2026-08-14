@@ -132,6 +132,25 @@ describe('looksLikeNewsletter — negatives', () => {
       <input type="email"><button>Continue</button>`));
     expect(looksLikeNewsletter(el)).toBe(false);
   });
+
+  // These two isolate the two inclusion guards (hasEmail, and the final
+  // SUBSCRIBE_WORDS check) rather than any veto. Every other check in
+  // looksLikeNewsletter passes on these fixtures, so only the named guard
+  // can be producing `false`. Mutation-verified: deleting
+  // `if (!hasEmail) return false;` flips only the first test; replacing the
+  // final `return SUBSCRIBE_WORDS.some(...)` with `return true` flips only
+  // the second.
+  it('isolates hasEmail: real subscribe copy, no email input at all', () => {
+    const el = mount(overlay(`<h2>Join our newsletter</h2>
+      <input type="text" placeholder="Name"><button>Subscribe</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('isolates the SUBSCRIBE_WORDS check: email input, no marketing word anywhere', () => {
+    const el = mount(overlay(`<h2>Welcome</h2>
+      <input type="email"><button>Continue</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
 });
 
 describe('dismissNewsletter', () => {
