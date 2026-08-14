@@ -38,6 +38,8 @@ See [docs/QA.md](docs/QA.md) for the checklist. This covers the `chrome.contentS
 
 **More, off by default:** hide chat bubbles · block Google one-tap · session-only cookies
 
+Known gaps and deferred findings are recorded in [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
+
 ## Privacy
 
 The extension makes no network requests of its own and collects no data. Consent rules are bundled at build time rather than fetched at runtime.
