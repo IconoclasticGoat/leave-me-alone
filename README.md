@@ -13,7 +13,22 @@ Inspired by [a Bluesky post by Helen Barnard](https://bsky.app/profile/helenbarn
 
 ## Status
 
-Pre-implementation. The design is settled — see [the design doc](docs/superpowers/specs/2026-08-13-leave-me-alone-design.md).
+**Complete, unverified on real websites.**
+
+The code is complete and all 121 unit tests pass. The extension has not yet been tested in a real Chrome browser against live websites — this verification requires manual QA.
+
+### To install and test:
+
+```bash
+npm install
+npm run build
+```
+
+Then load the unpacked extension from `dist/` via `chrome://extensions` with Developer mode on.
+
+### Manual QA:
+
+See [docs/QA.md](docs/QA.md) for the checklist. This covers the `chrome.contentSettings` layer and real-world CMP behavior, which cannot be tested headlessly.
 
 ## Planned settings
 
