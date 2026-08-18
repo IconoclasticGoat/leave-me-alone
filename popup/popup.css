@@ -55,6 +55,10 @@ h1 img {
   margin-right: 0.15rem;
 }
 
+/* No margin-bottom here: #pause is a <button> (display: inline-block),
+   so its own margin-top does not collapse with this rule's margin-bottom —
+   they would stack instead of overlapping. The gap above the button comes
+   solely from #pause's margin-top (0.75rem); adding one here would double it. */
 .banner {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -64,7 +68,6 @@ h1 img {
   border: 1px solid #ddd;
   border-radius: 6px;
   padding: 0.55rem 0.6rem;
-  margin-bottom: 0.6rem;
 }
 
 .banner-title {
