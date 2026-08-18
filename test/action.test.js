@@ -71,6 +71,17 @@ describe('stampTab', () => {
     chrome.action.setIcon = async () => { throw new Error('No tab with id: 7'); };
     await expect(stampTab(7, 'https://example.com/', {})).resolves.toBeUndefined();
   });
+
+  it('logs unexpected errors to console.debug without throwing', async () => {
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    try {
+      chrome.action.setIcon = async () => { throw new Error('Unexpected failure'); };
+      await expect(stampTab(7, 'https://example.com/', {})).resolves.toBeUndefined();
+      expect(debugSpy).toHaveBeenCalledWith('stampTab failed', expect.objectContaining({ tabId: 7 }));
+    } finally {
+      debugSpy.mockRestore();
+    }
+  });
 });
 
 describe('stampAllTabs', () => {

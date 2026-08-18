@@ -38,8 +38,11 @@ export async function stampTab(tabId, url, settings) {
       chrome.action.setIcon({ tabId, path }),
       chrome.action.setTitle({ tabId, title }),
     ]);
-  } catch {
-    // The tab closed between the event and this call. Routine.
+  } catch (e) {
+    // Usually a tab that closed between the event and the call landing.
+    // Log to catch unexpected failures (e.g. config errors) without breaking
+    // the flow.
+    console.debug('stampTab failed', { tabId, error: e });
   }
 }
 
