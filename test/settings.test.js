@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect } from 'vitest';
-import { DEFAULTS, getSettings, setSetting, isPaused, pauseSite, unpauseSite } from '../src/settings.js';
+import { DEFAULTS, getSettings, setSetting, isPaused, pauseSite, unpauseSite, isPausableHost } from '../src/settings.js';
 
 let store;
 beforeEach(() => {
@@ -81,5 +81,47 @@ describe('settings', () => {
     const s = await getSettings();
     expect(isPaused(s, 'www.nytimes.com')).toBe(false);
     expect(s.pausedSites).toEqual([]);
+  });
+
+  // A stored domain goes straight into a content-settings match pattern and
+  // into declarativeNetRequest's excludedRequestDomains. new URL() does not
+  // reject '*' in a host, and a failed navigation still populates tab.url,
+  // so these reach pauseSite without an adversary.
+  describe('pauseSite hostname validation', () => {
+    const REJECTED = [
+      ['*.com', 'a wildcard host would exempt every .com site'],
+      ['a*b.com', 'any wildcard at all breaks the match pattern'],
+      ['[::1]', 'a bracketed IPv6 literal is not a match-pattern host'],
+      ['example.com.', 'a trailing dot yields an empty final label'],
+      ['localhost', 'a single label has no dot and no registrable domain'],
+      ['', 'nothing at all'],
+      ['-bad.com', 'a label may not start with a hyphen'],
+      ['exa mple.com', 'whitespace is not a host'],
+    ];
+
+    for (const [host, why] of REJECTED) {
+      it(`refuses to store ${JSON.stringify(host)} — ${why}`, async () => {
+        expect(await pauseSite(host)).toBe(false);
+        const s = await getSettings();
+        expect(s.pausedSites).toEqual([]);
+      });
+    }
+
+    it('stores an ordinary hostname and reports that it did', async () => {
+      expect(await pauseSite('www.example.co.uk')).toBe(true);
+      expect((await getSettings()).pausedSites).toEqual(['example.co.uk']);
+    });
+
+    it('is idempotent for a host already paused', async () => {
+      await pauseSite('example.com');
+      expect(await pauseSite('example.com')).toBe(true);
+      expect((await getSettings()).pausedSites).toEqual(['example.com']);
+    });
+
+    it('exposes the same verdict through isPausableHost, so the popup can hide the button', async () => {
+      expect(isPausableHost('www.example.com')).toBe(true);
+      expect(isPausableHost('shop.example.co.uk')).toBe(true);
+      for (const [host] of REJECTED) expect(isPausableHost(host)).toBe(false);
+    });
   });
 });

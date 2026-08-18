@@ -1,4 +1,4 @@
-import { getSettings, setSetting, pauseSite, unpauseSite, isPaused } from '../src/settings.js';
+import { getSettings, setSetting, pauseSite, unpauseSite, isPaused, isPausableHost } from '../src/settings.js';
 
 export const TOGGLE_GROUPS = {
   primary: [
@@ -98,7 +98,10 @@ async function init() {
   container.classList.toggle('paused-toggles', paused);
 
   const btn = document.querySelector('#pause');
-  if (!host) { btn.hidden = true; return; }
+  // No host, or a host pauseSite would refuse to store (a failed navigation
+  // can leave "http://*.com/" on the tab, which URL parses happily). Offering
+  // a button that silently does nothing is worse than offering none.
+  if (!host || !isPausableHost(host)) { btn.hidden = true; return; }
 
   applyPausedState(document, host, paused);
   btn.addEventListener('click', async () => {
