@@ -24,6 +24,7 @@
 ```
 manifest.json              MV3 manifest
 package.json               scripts: build, test, bundle-rules
+build.config.mjs           entry groups: iife for content scripts, esm for the rest
 build.mjs                  esbuild bundling
 scripts/bundle-rules.mjs   fetch + merge Consent-O-Matic rules -> src/rules/bundle.json
 
@@ -83,9 +84,12 @@ describe('manifest', () => {
 
   it('is manifest v3', () => expect(m.manifest_version).toBe(3));
 
-  it('requests exactly the permissions we need', () => {
+  it('requests exactly the permissions we need, and no more', () => {
+    // No `scripting`: content scripts are declared statically and the GPC
+    // injector uses web_accessible_resources, not programmatic injection.
+    // Unused permissions widen the install prompt and draw store-review scrutiny.
     expect(new Set(m.permissions)).toEqual(new Set([
-      'storage', 'contentSettings', 'declarativeNetRequest', 'scripting',
+      'storage', 'contentSettings', 'declarativeNetRequest',
     ]));
   });
 
@@ -135,7 +139,7 @@ Then `npm install`.
   "name": "Leave Me Alone",
   "version": "0.1.0",
   "description": "Necessary cookies only, no notification prompts, no location requests, no newsletter popups.",
-  "permissions": ["storage", "contentSettings", "declarativeNetRequest", "scripting"],
+  "permissions": ["storage", "contentSettings", "declarativeNetRequest"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_popup": "popup/popup.html" },
@@ -155,32 +159,63 @@ Then `npm install`.
 }
 ```
 
-- [ ] **Step 5: Create build.mjs**
+- [ ] **Step 5: Create build.config.mjs**
+
+The output format is not uniform, and getting it wrong fails silently in the browser while every unit test still passes. Content scripts are injected as **classic scripts** — MV3 has no `"type": "module"` for `content_scripts` entries — so a top-level `export` in those bundles is a `SyntaxError` that kills the whole file. The service worker (`"type": "module"`) and the popup (`<script type="module">`) both load ESM natively.
+
+Keeping the two groups in their own file lets a test assert the formats never drift.
+
+```js
+// build.config.mjs
+export const SHARED = {
+  bundle: true,
+  target: 'chrome120',
+  outdir: 'dist',
+  loader: { '.json': 'json' },
+};
+
+// Injected into pages as classic scripts. MUST be iife — a top-level
+// `export` here is a SyntaxError that silently disables the whole script.
+export const CONTENT_BUILD = {
+  ...SHARED,
+  format: 'iife',
+  entryPoints: {
+    content: 'src/content/index.js',
+    'gpc-inject': 'src/content/gpc-inject.js',
+    'gpc-main': 'src/content/gpc-main.js',
+  },
+};
+
+// Loaded as real modules by Chrome; ESM is correct here.
+export const MODULE_BUILD = {
+  ...SHARED,
+  format: 'esm',
+  entryPoints: {
+    background: 'src/background/index.js',
+    'popup/popup': 'popup/popup.js',
+  },
+};
+```
+
+Create `build.mjs`:
 
 ```js
 import * as esbuild from 'esbuild';
 import { cpSync, mkdirSync } from 'node:fs';
+import { CONTENT_BUILD, MODULE_BUILD } from './build.config.mjs';
 
 mkdirSync('dist', { recursive: true });
 
-await esbuild.build({
-  entryPoints: {
-    background: 'src/background/index.js',
-    content: 'src/content/index.js',
-    'popup/popup': 'popup/popup.js',
-  },
-  bundle: true,
-  format: 'esm',
-  target: 'chrome120',
-  outdir: 'dist',
-  loader: { '.json': 'json' },
-});
+await esbuild.build(CONTENT_BUILD);
+await esbuild.build(MODULE_BUILD);
 
 for (const f of ['manifest.json', 'rules', 'popup/popup.html', 'popup/popup.css']) {
   cpSync(f, `dist/${f}`, { recursive: true });
 }
 console.log('built dist/');
 ```
+
+Note: the `content`, `gpc-inject`, `gpc-main`, and `popup/popup` entries name files that Tasks 4, 5, and 13 create. `npm run build` will not succeed until Task 13. That is expected — do not create stubs.
 
 - [ ] **Step 6: Create .gitignore and THIRD_PARTY.md**
 
@@ -341,9 +376,11 @@ git commit -m "feat: settings store with per-site pause"
 
 **Interfaces:**
 - Consumes: `DEFAULTS` from `src/settings.js`.
-- Produces: `applyContentSettings(settings)` → `Promise<{ ok: string[], failed: Array<{key, error}> }>`.
+- Produces: `applyContentSettings(settings)` → `Promise<{ ok: string[], failed: Array<{type, settingKey, error}> }>`.
 
 The failure report matters: a toggle that shows as on but is not enforced is worse than one that admits it failed. Task 5 surfaces this in the popup.
+
+Each `failed` entry carries **both** identifiers. `type` is the Chrome content-settings type that rejected (`camera`); `settingKey` is the user-facing toggle that drove it (`cameraMic`). One toggle can drive two types, so type alone cannot tell the popup which switch to mark — and marking the switch is what the design doc requires.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -388,10 +425,35 @@ describe('applyContentSettings', () => {
     expect(calls).toContainEqual(['microphone', 'block']);
   });
 
-  it('reports failures instead of throwing', async () => {
+  it('reports failures instead of throwing, naming both type and toggle', async () => {
     chrome.contentSettings.sound.set = async () => { throw new Error('unsupported'); };
     const r = await applyContentSettings({ autoplaySound: true });
-    expect(r.failed).toEqual([{ key: 'sound', error: 'unsupported' }]);
+    expect(r.failed).toEqual([
+      { type: 'sound', settingKey: 'autoplaySound', error: 'unsupported' },
+    ]);
+  });
+
+  it('names the driving toggle when one of a pair fails', async () => {
+    chrome.contentSettings.camera.set = async () => { throw new Error('nope'); };
+    const r = await applyContentSettings({ cameraMic: true });
+    expect(r.failed).toEqual([
+      { type: 'camera', settingKey: 'cameraMic', error: 'nope' },
+    ]);
+    // microphone still applied — one failure must not abort its partner
+    expect(calls).toContainEqual(['microphone', 'block']);
+  });
+
+  it('keeps applying later map entries after an earlier one fails', async () => {
+    chrome.contentSettings.notifications.set = async () => { throw new Error('x'); };
+    const r = await applyContentSettings({ notifications: true, sessionOnlyCookies: true });
+    expect(r.failed).toHaveLength(1);
+    expect(calls).toContainEqual(['cookies', 'session_only']);
+  });
+
+  it('survives a rejection that is not an Error', async () => {
+    chrome.contentSettings.sound.set = async () => { throw 'plain string'; };
+    const r = await applyContentSettings({ autoplaySound: true });
+    expect(r.failed[0].error).toBe('plain string');
   });
 });
 ```
@@ -430,7 +492,13 @@ export async function applyContentSettings(settings) {
         ok.push(type);
       } catch (e) {
         // `sound` requires Chrome 141+; older builds reject it. Report, don't throw.
-        failed.push({ key: type, error: e.message });
+        // Carry settingKey too: one toggle can drive two types, and the popup
+        // marks the toggle, not the type.
+        failed.push({
+          type,
+          settingKey: key,
+          error: e?.message ?? String(e),
+        });
       }
     }
   }
@@ -452,15 +520,20 @@ git commit -m "feat: contentSettings enforcement layer"
 
 ---
 
-### Task 4: DNR rulesets and service worker
+### Task 4: DNR rulesets, GPC property, and service worker
 
 **Files:**
-- Create: `rules/gpc.json`, `rules/one-tap.json`, `rules/chat-widgets.json`, `src/background/rulesets.js`, `src/background/index.js`
-- Test: `test/rulesets.test.js`
+- Create: `rules/gpc.json`, `rules/one-tap.json`, `rules/chat-widgets.json`, `src/background/rulesets.js`, `src/background/index.js`, `src/content/gpc-inject.js`, `src/content/gpc-main.js`
+- Modify: `manifest.json` (add the GPC injector content script and `web_accessible_resources`)
+- Test: `test/rulesets.test.js`, `test/gpc.test.js`
 
 **Interfaces:**
 - Consumes: `getSettings` from `src/settings.js`, `applyContentSettings` from Task 3.
-- Produces: `RULESET_MAP`, `applyRulesets(settings)`.
+- Produces: `RULESET_MAP`, `applyRulesets(settings)`, `injectGpc(doc, settings)`.
+
+**Why two GPC mechanisms.** The spec requires both the `Sec-GPC` request header and the `navigator.globalPrivacyControl` property — some sites check one, some the other. The header is a DNR rule. The property must be set in the page's MAIN world, which an ISOLATED content script cannot reach directly, so `gpc-inject.js` (ISOLATED, `document_start`) reads the toggle and appends a `<script src=…gpc-main.js>` from `web_accessible_resources`. This needs no `scripting` permission.
+
+**Known caveat, accept it.** Reading `chrome.storage` is async, so the property is set a few milliseconds into page load rather than truly synchronously. Page scripts that read `navigator.globalPrivacyControl` in their very first statement may miss it. Do not try to close this race — the alternatives are a `scripting` permission or an ungated always-on injection, both of which the plan rejected deliberately.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -585,16 +658,143 @@ chrome.storage.onChanged.addListener((_changes, area) => {
 });
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [ ] **Step 6: Write the failing GPC injection test**
 
-Run: `npx vitest run test/rulesets.test.js`
-Expected: PASS (2 tests)
+```js
+// test/gpc.test.js
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach } from 'vitest';
+import { injectGpc } from '../src/content/gpc-inject.js';
 
-- [ ] **Step 7: Commit**
+beforeEach(() => {
+  document.documentElement.innerHTML = '<head></head><body></body>';
+  globalThis.chrome = { runtime: { getURL: (p) => `chrome-extension://abc/${p}` } };
+});
+
+describe('injectGpc', () => {
+  it('appends a MAIN-world script when the toggle is on', () => {
+    injectGpc(document, { gpc: true });
+    const s = document.querySelector('script[src*="gpc-main.js"]');
+    expect(s).not.toBe(null);
+    expect(s.src).toBe('chrome-extension://abc/gpc-main.js');
+  });
+
+  it('injects nothing when the toggle is off', () => {
+    injectGpc(document, { gpc: false });
+    expect(document.querySelector('script[src*="gpc-main.js"]')).toBe(null);
+  });
+
+  it('does not inject twice', () => {
+    injectGpc(document, { gpc: true });
+    injectGpc(document, { gpc: true });
+    expect(document.querySelectorAll('script[src*="gpc-main.js"]')).toHaveLength(1);
+  });
+});
+```
+
+- [ ] **Step 7: Run test to verify it fails**
+
+Run: `npx vitest run test/gpc.test.js`
+Expected: FAIL — cannot resolve `../src/content/gpc-inject.js`
+
+- [ ] **Step 8: Implement the two GPC scripts**
+
+```js
+// src/content/gpc-inject.js — ISOLATED world, document_start
+import { getSettings } from '../settings.js';
+
+const MARKER = 'data-lma-gpc';
+
+export function injectGpc(doc, settings) {
+  if (!settings?.gpc) return null;
+  if (doc.querySelector(`script[${MARKER}]`)) return null;
+
+  const el = doc.createElement('script');
+  el.setAttribute(MARKER, '');
+  el.src = chrome.runtime.getURL('gpc-main.js');
+  // Remove the tag once it has run; the property it sets persists.
+  el.onload = () => el.remove();
+  (doc.head ?? doc.documentElement).appendChild(el);
+  return el;
+}
+
+async function main() {
+  injectGpc(document, await getSettings());
+}
+
+if (typeof chrome !== 'undefined' && chrome.storage) main();
+```
+
+```js
+// src/content/gpc-main.js — runs in the page's MAIN world
+// Standalone by design: bundled as its own entry, no imports.
+try {
+  Object.defineProperty(navigator, 'globalPrivacyControl', {
+    value: true,
+    configurable: false,
+    enumerable: true,
+  });
+} catch {
+  // Another extension may have defined it already. Theirs is equivalent; leave it.
+}
+```
+
+Both GPC entry points are already declared in `build.config.mjs`'s `CONTENT_BUILD` from Task 1, so no build change is needed here — verify they are present and in the `iife` group, not the `esm` one.
+
+Add to `manifest.json`:
+
+```json
+"content_scripts": [
+  { "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle", "all_frames": true },
+  { "matches": ["<all_urls>"], "js": ["gpc-inject.js"], "run_at": "document_start", "all_frames": true }
+],
+"web_accessible_resources": [
+  { "resources": ["gpc-main.js"], "matches": ["<all_urls>"] }
+]
+```
+
+- [ ] **Step 9: Write the bundle-format guard test**
+
+This is the test that would have caught the format bug. It builds the real content-script config and asserts the output is loadable as a classic script.
+
+```js
+// test/bundle-format.test.js
+import * as esbuild from 'esbuild';
+import { describe, it, expect } from 'vitest';
+import { CONTENT_BUILD, MODULE_BUILD } from '../build.config.mjs';
+
+describe('bundle formats', () => {
+  it('builds content scripts as iife, never esm', () => {
+    expect(CONTENT_BUILD.format).toBe('iife');
+    expect(MODULE_BUILD.format).toBe('esm');
+  });
+
+  it('emits no top-level export in a content-script bundle', async () => {
+    // MV3 content_scripts have no "type": "module" — a top-level export
+    // is a SyntaxError that silently disables the entire script.
+    const r = await esbuild.build({
+      ...CONTENT_BUILD,
+      entryPoints: ['src/content/gpc-inject.js'],
+      outdir: undefined,
+      write: false,
+    });
+    expect(r.outputFiles[0].text).not.toMatch(/^export[\s{]/m);
+  });
+});
+```
+
+- [ ] **Step 10: Run tests to verify they pass**
+
+Run: `npx vitest run test/rulesets.test.js test/gpc.test.js test/bundle-format.test.js`
+Expected: PASS (2 + 3 + 2 tests)
+
+- [ ] **Step 11: Commit**
 
 ```bash
-git add rules/ src/background/rulesets.js src/background/index.js test/rulesets.test.js
-git commit -m "feat: DNR rulesets for GPC, one-tap, chat widgets"
+git add rules/ src/background/ src/content/gpc-inject.js src/content/gpc-main.js \
+        manifest.json build.config.mjs build.mjs \
+        test/rulesets.test.js test/gpc.test.js test/bundle-format.test.js
+git commit -m "feat: DNR rulesets and GPC signal via header and navigator property"
 ```
 
 ---
@@ -633,6 +833,42 @@ describe('popup', () => {
     renderToggles(el, { cookieBanners: true, notifications: false });
     expect(el.querySelector('#toggle-cookieBanners').checked).toBe(true);
     expect(el.querySelector('#toggle-notifications').checked).toBe(false);
+  });
+});
+
+describe('markUnenforced', () => {
+  const mount = () => {
+    document.body.innerHTML = '<div id="toggles"></div><p id="errors"></p>';
+    renderToggles(document.querySelector('#toggles'), {});
+    return document;
+  };
+
+  it('collapses two failures from one toggle into a single label', () => {
+    const doc = mount();
+    // cameraMic drives both camera and microphone; the user has one switch.
+    markUnenforced(doc, [
+      { type: 'camera', settingKey: 'cameraMic', error: 'x' },
+      { type: 'microphone', settingKey: 'cameraMic', error: 'x' },
+    ]);
+    const text = doc.querySelector('#errors').textContent;
+    expect(text).toContain('Block camera & microphone prompts');
+    expect(text.match(/camera/gi)).toHaveLength(1);
+  });
+
+  it('marks the row of the toggle that failed', () => {
+    const doc = mount();
+    markUnenforced(doc, [{ type: 'sound', settingKey: 'autoplaySound', error: 'x' }]);
+    const row = doc.querySelector('#toggle-autoplaySound').closest('.row');
+    expect(row.classList.contains('unenforced')).toBe(true);
+    expect(doc.querySelector('#toggle-notifications').closest('.row')
+      .classList.contains('unenforced')).toBe(false);
+  });
+
+  it('says nothing when everything applied', () => {
+    const doc = mount();
+    markUnenforced(doc, []);
+    expect(doc.querySelector('#errors').textContent).toBe('');
+    expect(doc.querySelectorAll('.unenforced')).toHaveLength(0);
   });
 });
 ```
@@ -714,10 +950,21 @@ async function init() {
   });
 
   const { lastApplyErrors = [] } = await chrome.storage.local.get({ lastApplyErrors: [] });
-  if (lastApplyErrors.length) {
-    document.querySelector('#errors').textContent =
-      `Not enforced by this Chrome version: ${lastApplyErrors.map((e) => e.key).join(', ')}`;
+  markUnenforced(document, lastApplyErrors);
+}
+
+/** Marks the toggles Chrome refused to enforce, by their settingKey. */
+export function markUnenforced(doc, failures = []) {
+  const keys = [...new Set(failures.map((f) => f.settingKey))];
+  if (keys.length === 0) return;
+
+  const all = [...TOGGLE_GROUPS.primary, ...TOGGLE_GROUPS.more];
+  for (const key of keys) {
+    doc.querySelector(`#toggle-${key}`)?.closest('.row')?.classList.add('unenforced');
   }
+  const labels = keys.map((k) => all.find((t) => t.key === k)?.label ?? k);
+  doc.querySelector('#errors').textContent =
+    `This Chrome version can't enforce: ${labels.join(', ')}`;
 }
 
 if (typeof document !== 'undefined' && document.querySelector('#toggles')) init();
@@ -739,6 +986,8 @@ if (typeof document !== 'undefined' && document.querySelector('#toggles')) init(
 - [ ] **Step 5: Create popup/popup.css**
 
 Minimal: `width: 300px`, system font stack, `.row { display: grid; grid-template-columns: auto 1fr; gap: .5rem; align-items: center; }`, `.more { border-top: 1px solid #ddd; margin-top: .75rem; padding-top: .75rem; }`, `.warning { grid-column: 2; color: #a33; font-size: .75rem; }`, `.errors:empty { display: none; }`.
+
+Also `.unenforced { opacity: .55; }` — `markUnenforced` adds that class to rows Chrome refused to apply, and without a rule for it the marking is invisible and the class is dead code.
 
 - [ ] **Step 6: Run test to verify it passes**
 
@@ -921,6 +1170,64 @@ describe('waitFor', () => {
     setTimeout(() => { v = 'ready'; }, 10);
     expect(await waitFor(() => v, 500)).toBe('ready');
   });
+  it('treats a throwing predicate as not-ready, never rejecting', async () => {
+    expect(await waitFor(() => { throw new Error('boom'); }, 30)).toBe(null);
+  });
+});
+
+// These are the page-safety guarantees. They are the reason this layer
+// exists in the shape it does, so they get explicit tests.
+describe('queryAll never throws into the page', () => {
+  it('returns [] for a malformed selector', () => {
+    document.body.innerHTML = `<div>x</div>`;
+    expect(queryAll(document, { selector: '[unclosed' })).toEqual([]);
+    expect(queryAll(document, { selector: ':::bad' })).toEqual([]);
+  });
+
+  it('returns [] when an element throws during filtering', () => {
+    document.body.innerHTML = `<div id="a">x</div>`;
+    const el = document.querySelector('#a');
+    // Simulates a node whose document lost its browsing context.
+    Object.defineProperty(el, 'ownerDocument', {
+      get() { throw new Error('detached'); },
+    });
+    expect(queryAll(document, { selector: '#a', displayFilter: true })).toEqual([]);
+  });
+
+  it('applies displayFilter, excluding hidden elements', () => {
+    document.body.innerHTML =
+      `<div class="c" id="v">shown</div><div class="c" style="display:none">hidden</div>`;
+    document.querySelector('#v').getBoundingClientRect = () => ({ width: 10, height: 10 });
+    const r = queryAll(document, { selector: '.c', displayFilter: true });
+    expect(r).toHaveLength(1);
+    expect(r[0].id).toBe('v');
+  });
+
+  it('applies childFilter, requiring a descendant match', () => {
+    document.body.innerHTML =
+      `<div class="row" id="has"><input type="checkbox"></div>` +
+      `<div class="row" id="lacks"><span>no input</span></div>`;
+    const r = queryAll(document, { selector: '.row', childFilter: { selector: 'input' } });
+    expect(r).toHaveLength(1);
+    expect(r[0].id).toBe('has');
+  });
+});
+
+describe('isShown on a detached document', () => {
+  it('is false rather than throwing when defaultView is null', () => {
+    document.body.innerHTML = `<div id="a">x</div>`;
+    const el = document.querySelector('#a');
+    Object.defineProperty(el, 'ownerDocument', { get: () => ({ defaultView: null }) });
+    expect(() => isShown(el)).not.toThrow();
+    expect(isShown(el)).toBe(false);
+  });
+});
+
+describe('matchesText with malformed rule data', () => {
+  it('accepts a bare string where an array was expected', () => {
+    document.body.innerHTML = `<button>Reject all</button>`;
+    expect(matchesText(document.querySelector('button'), 'reject')).toBe(true);
+  });
 });
 ```
 
@@ -936,39 +1243,55 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function isShown(el) {
   if (!el || !el.isConnected) return false;
-  const style = el.ownerDocument.defaultView.getComputedStyle(el);
+  // isConnected stays true for nodes inside a DETACHED iframe's document,
+  // but that document's defaultView is null once its browsing context is
+  // discarded. Consent UIs live in iframes constantly, so reading
+  // ownerDocument.defaultView unguarded throws on a routine case.
+  const view = el.ownerDocument?.defaultView;
+  if (!view) return false;
+
+  const style = view.getComputedStyle(el);
   if (style.display === 'none' || style.visibility === 'hidden') return false;
-  if (style.opacity === '0') return false;
+  if (style.opacity === '0') return false; // computed opacity normalizes to a string
   const rect = el.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
 }
 
 export function matchesText(el, filters) {
-  if (!filters || filters.length === 0) return true;
+  // Vendored rules occasionally carry a bare string where an array belongs.
+  const list = Array.isArray(filters) ? filters : filters == null ? [] : [filters];
+  if (list.length === 0) return true;
   const text = (el.textContent ?? '').trim().toLowerCase();
-  return filters.some((f) => text.includes(String(f).trim().toLowerCase()));
+  return list.some((f) => text.includes(String(f).trim().toLowerCase()));
 }
 
 export function queryAll(root, target) {
   if (!target?.selector) return [];
-  let els;
   try {
-    els = Array.from((root ?? document).querySelectorAll(target.selector));
+    let els = Array.from((root ?? document).querySelectorAll(target.selector));
+    if (target.textFilter) els = els.filter((el) => matchesText(el, target.textFilter));
+    if (target.displayFilter) els = els.filter((el) => isShown(el));
+    if (target.childFilter) {
+      els = els.filter((el) => queryAll(el, target.childFilter).length > 0);
+    }
+    return els;
   } catch {
-    return []; // malformed selector in a rule must never throw into the page
+    // The guard covers the WHOLE pipeline, not just the selector: a detached
+    // document, odd rule data, or a hostile getter must never throw into the
+    // host page. Returning [] degrades to "found nothing".
+    return [];
   }
-  if (target.textFilter) els = els.filter((el) => matchesText(el, target.textFilter));
-  if (target.displayFilter) els = els.filter((el) => isShown(el));
-  if (target.childFilter) {
-    els = els.filter((el) => queryAll(el, target.childFilter).length > 0);
-  }
-  return els;
 }
 
 export async function waitFor(fn, timeoutMs = 2000, intervalMs = 50) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const v = fn();
+    let v = null;
+    try {
+      v = fn();
+    } catch {
+      v = null; // a throwing predicate is "not ready", never an escaping rejection
+    }
     if (v) return v;
     if (Date.now() >= deadline) return null;
     await sleep(intervalMs);
@@ -1006,7 +1329,7 @@ git commit -m "feat: engine DOM helpers"
 // test/matchers.test.js
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { createMatcher } from '../src/engine/matchers.js';
+import { createMatcher, matchesAll } from '../src/engine/matchers.js';
 
 describe('createMatcher', () => {
   it('css matches when the selector hits', () => {
@@ -1035,6 +1358,70 @@ describe('createMatcher', () => {
 
   it('unknown matcher types are false, never thrown', () => {
     expect(createMatcher({ type: 'nonsense' }).matches(document)).toBe(false);
+    expect(createMatcher(null).matches(document)).toBe(false);
+    expect(createMatcher({ type: 'css' }).matches(document)).toBe(false); // no target
+  });
+
+  it('reads on/off from a data-checked attribute', () => {
+    document.body.innerHTML = `<div id="t" data-checked="true"></div>`;
+    expect(createMatcher({ type: 'onoff', target: { selector: '#t' } })
+      .matches(document)).toBe(true);
+    document.querySelector('#t').setAttribute('data-checked', 'false');
+    expect(createMatcher({ type: 'onoff', target: { selector: '#t' } })
+      .matches(document)).toBe(false);
+  });
+
+  it('reads on/off from a class name when nothing else is present', () => {
+    document.body.innerHTML = `<div id="on" class="checked"></div><div id="off"></div>`;
+    const m = (sel) => createMatcher({ type: 'checkbox', target: { selector: sel } })
+      .matches(document);
+    expect(m('#on')).toBe(true);
+    expect(m('#off')).toBe(false);
+  });
+});
+
+describe('url matcher', () => {
+  it('matches the current href', () => {
+    // jsdom's default location is http://localhost:3000/
+    expect(createMatcher({ type: 'url', target: { regex: 'localhost' } })
+      .matches(document)).toBe(true);
+    expect(createMatcher({ type: 'url', target: { regex: 'example\\.com' } })
+      .matches(document)).toBe(false);
+  });
+
+  it('returns false rather than throwing on a malformed pattern', () => {
+    const m = createMatcher({ type: 'url', target: { regex: '[' } });
+    expect(() => m.matches(document)).not.toThrow();
+    expect(m.matches(document)).toBe(false);
+  });
+
+  it('one malformed pattern does not void a valid sibling', () => {
+    const m = createMatcher({ type: 'url', target: { urlFilter: ['[', 'localhost'] } });
+    expect(m.matches(document)).toBe(true);
+  });
+});
+
+describe('matchesAll', () => {
+  it('is false for an empty list — a detector with no matchers matches nothing', () => {
+    expect(matchesAll([], document)).toBe(false);
+  });
+
+  it('accepts a single config that is not wrapped in an array', () => {
+    document.body.innerHTML = `<div id="b"></div>`;
+    expect(matchesAll({ type: 'css', target: { selector: '#b' } }, document)).toBe(true);
+  });
+
+  it('requires every config to match', () => {
+    document.body.innerHTML = `<div id="a"></div>`;
+    const present = { type: 'css', target: { selector: '#a' } };
+    const absent = { type: 'css', target: { selector: '#nope' } };
+    expect(matchesAll([present, present], document)).toBe(true);
+    expect(matchesAll([present, absent], document)).toBe(false);
+  });
+
+  it('survives a matcher that throws', () => {
+    document.body.innerHTML = `<div id="a"></div>`;
+    expect(matchesAll([{ type: 'url', target: { regex: '(' } }], document)).toBe(false);
   });
 });
 ```
@@ -1061,28 +1448,31 @@ function readOnOff(el) {
   return el.classList.contains('checked') || el.classList.contains('active');
 }
 
+// checkbox and onoff are the same question asked twice by the DSL.
+const readState = (c) => ({
+  matches: (root) => {
+    const el = queryAll(root, c.target)[0];
+    return el ? readOnOff(el) : false;
+  },
+});
+
 const TYPES = {
   css: (c) => ({ matches: (root) => queryAll(root, c.target).length > 0 }),
 
-  checkbox: (c) => ({
-    matches: (root) => {
-      const el = queryAll(root, c.target)[0];
-      return el ? readOnOff(el) : false;
-    },
-  }),
-
-  onoff: (c) => ({
-    matches: (root) => {
-      const el = queryAll(root, c.target)[0];
-      return el ? readOnOff(el) : false;
-    },
-  }),
+  checkbox: readState,
+  onoff: readState,
 
   url: (c) => ({
     matches: () => {
       const filters = c.target?.regex ? [c.target.regex] : (c.target?.urlFilter ?? []);
       const href = globalThis.location?.href ?? '';
-      return filters.some((f) => new RegExp(f).test(href));
+      return filters.some((f) => {
+        try {
+          return new RegExp(f).test(href);
+        } catch {
+          return false; // one malformed pattern must not void the others
+        }
+      });
     },
   }),
 };
@@ -1090,11 +1480,27 @@ const TYPES = {
 export function createMatcher(config) {
   const make = TYPES[config?.type];
   if (!make) return { matches: () => false };
+
+  let inner;
   try {
-    return make(config);
+    inner = make(config);
   } catch {
     return { matches: () => false };
   }
+
+  // The guard must wrap EVALUATION, not just construction. Every matcher
+  // body runs against untrusted rule data at match time — long after
+  // createMatcher returned — so guarding only `make(config)` protects
+  // nothing: for every type here, make() just returns an object literal.
+  return {
+    matches(root) {
+      try {
+        return Boolean(inner.matches(root));
+      } catch {
+        return false;
+      }
+    },
+  };
 }
 
 export function matchesAll(configs, root) {
@@ -1208,6 +1614,76 @@ describe('consent', () => {
       type: 'E', toggleAction: { type: 'click', target: { selector: '#m' } },
     }]});
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('prefers falseAction over toggling when both are given', async () => {
+    // The highest-risk ordering in the engine: if toggling won instead,
+    // an already-on category could be double-handled and left enabled.
+    document.body.innerHTML =
+      `<input type="checkbox" id="m" checked><button id="reject">Reject</button>`;
+    const toggle = vi.spyOn(document.querySelector('#m'), 'click');
+    const direct = vi.spyOn(document.querySelector('#reject'), 'click');
+    await run({ type: 'consent', consents: [{
+      type: 'E',
+      falseAction: { type: 'click', target: { selector: '#reject' } },
+      matcher: { type: 'checkbox', target: { selector: '#m' } },
+      toggleAction: { type: 'click', target: { selector: '#m' } },
+    }]});
+    expect(direct).toHaveBeenCalled();
+    expect(toggle).not.toHaveBeenCalled();
+  });
+});
+
+describe('wait and close', () => {
+  it('wait resolves after its configured delay', async () => {
+    const t0 = Date.now();
+    await run({ type: 'wait', waitTime: 30 });
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(25);
+  });
+
+  it('close calls the global close', async () => {
+    const spy = vi.fn();
+    const original = globalThis.close;
+    globalThis.close = spy;
+    await run({ type: 'close' });
+    globalThis.close = original;
+    expect(spy).toHaveBeenCalled();
+  });
+});
+
+describe('waitcss', () => {
+  it('resolves once the selector appears', async () => {
+    document.body.innerHTML = ``;
+    setTimeout(() => { document.body.innerHTML = `<div id="late">here</div>`; }, 20);
+    await run({ type: 'waitcss', target: { selector: '#late' }, timeout: 500 });
+    expect(document.querySelector('#late')).not.toBe(null);
+  });
+
+  it('gives up at the timeout instead of hanging', async () => {
+    document.body.innerHTML = ``;
+    const t0 = Date.now();
+    await run({ type: 'waitcss', target: { selector: '#never' }, timeout: 60 });
+    expect(Date.now() - t0).toBeLessThan(2000);
+  });
+
+  it('waits for absence when negated', async () => {
+    document.body.innerHTML = `<div id="going">x</div>`;
+    setTimeout(() => { document.querySelector('#going').remove(); }, 20);
+    await run({ type: 'waitcss', target: { selector: '#going' }, negated: true, timeout: 500 });
+    expect(document.querySelector('#going')).toBe(null);
+  });
+});
+
+describe('ifallowall', () => {
+  it('takes the false branch, because nothing is ever allowed', async () => {
+    document.body.innerHTML = `<button id="t">t</button><button id="f">f</button>`;
+    const t = vi.spyOn(document.querySelector('#t'), 'click');
+    const f = vi.spyOn(document.querySelector('#f'), 'click');
+    await run({ type: 'ifallowall',
+      trueAction: { type: 'click', target: { selector: '#t' } },
+      falseAction: { type: 'click', target: { selector: '#f' } } });
+    expect(f).toHaveBeenCalled();
+    expect(t).not.toHaveBeenCalled();
   });
 });
 
@@ -1634,6 +2110,73 @@ describe('looksLikeNewsletter — negatives', () => {
     document.body.innerHTML = overlay(`<input type="email"><button>Subscribe</button>`);
     expect(looksLikeNewsletter(document.querySelector('#m'))).toBe(false);
   });
+
+  it('leaves a passwordless magic-link sign-in alone', () => {
+    // All three positive signals present and no password field, yet this is
+    // an auth flow. Dismissing it would break the site's login.
+    const el = mount(overlay(`<h2>Sign up or log in</h2>
+      <p>We'll email you a magic link.</p>
+      <input type="email"><button>Continue</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves an OAuth account overlay alone', () => {
+    const el = mount(overlay(`<h2>Sign up for 10% off</h2>
+      <button>Continue with Google</button>
+      <input type="email"><button>Sign up</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves an overlay offering an existing-account path alone', () => {
+    const el = mount(overlay(`<h2>Join us</h2><input type="email">
+      <button>Sign up</button><a>Already have an account?</a>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves a username-autocomplete field alone', () => {
+    const el = mount(overlay(`<h2>Subscribe</h2>
+      <input type="email" autocomplete="username"><button>Go</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  // Each of these carries a REAL SUBSCRIBE_WORDS match, so the only thing
+  // stopping dismissal is the specific refusal named. Remove that refusal and
+  // the test flips — which is what makes it a guard rather than a decoration.
+  it('refuses a password field even when the copy is pure marketing', () => {
+    const el = mount(overlay(`<h2>Subscribe and get 10% off</h2>
+      <input type="email"><input type="password"><button>Go</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('refuses an existing-account link even under newsletter copy', () => {
+    const el = mount(overlay(`<h2>Join our newsletter</h2>
+      <input type="email"><button>Go</button><a>Already have an account?</a>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('refuses a magic link even under newsletter copy', () => {
+    const el = mount(overlay(`<h2>Subscribe for updates</h2>
+      <p>We'll send you a magic link.</p><input type="email">`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('refuses a registration wall that dangles a discount', () => {
+    // The realistic e-commerce pattern: account creation sold with a coupon.
+    const el = mount(overlay(`<h2>Create your free account</h2>
+      <p>Get exclusive discount access.</p>
+      <input type="email"><button>Continue</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves an account signup whose only marketing word is "sign up"', () => {
+    // Phrased to dodge every AUTH_MARKER. It survives because "sign up" is
+    // not a positive signal on its own — the phrase is shared with
+    // registration forms and cannot tell them apart.
+    const el = mount(overlay(`<h2>New here?</h2>
+      <p>Sign up and we'll email you a link to access your account.</p>
+      <input type="email"><button>Continue</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
 });
 
 describe('dismissNewsletter', () => {
@@ -1664,9 +2207,32 @@ Expected: FAIL — cannot resolve module
 ```js
 import { isShown } from '../engine/tools.js';
 
+// Deliberately excludes "sign up" / "signup". Those are the one phrase a
+// newsletter popup and an account-creation overlay genuinely share, so they
+// cannot distinguish the two. Real newsletter popups almost always also say
+// "newsletter", "subscribe", "% off", "discount", or "mailing list"; an
+// overlay whose ONLY marketing signal is "sign up" is indistinguishable from
+// a registration form, and we leave those alone.
 const SUBSCRIBE_WORDS = [
-  'newsletter', 'subscribe', 'sign up', 'signup', 'join our', 'mailing list',
+  'newsletter', 'subscribe', 'join our', 'mailing list',
   '% off', 'discount', 'first order', 'stay in the loop', 'get updates',
+];
+
+// Overlays that are really account or auth flows. Any of these outweighs
+// every positive signal. A passwordless "magic link" sign-in has an email
+// input, overlay positioning, and "Sign up" copy — all three signals — yet
+// dismissing it breaks the site's login. Missing a newsletter is cheap;
+// destroying an auth flow is not.
+const AUTH_MARKERS = [
+  'sign in', 'signin', 'log in', 'login', 'already have an account',
+  'continue with google', 'continue with apple', 'continue with facebook',
+  'magic link', 'verification code', 'one-time code',
+  'forgot password', 'reset password',
+  // Registration walls. "Create your free account — get exclusive discount
+  // access" carries a real marketing word and would otherwise be dismissed,
+  // which is the expensive kind of mistake.
+  'create account', 'create an account', 'create your account',
+  'free account', 'your account', 'register',
 ];
 
 const CLOSE_SELECTORS = [
@@ -1687,15 +2253,18 @@ export function looksLikeNewsletter(el) {
 
   // Hard refusals — these are the shapes we must never touch.
   if (el.querySelector('input[type=password]')) return false;
+  if (el.querySelector('input[autocomplete="username"]')) return false;
   const inputs = el.querySelectorAll('input:not([type=hidden]):not([type=submit])');
   if (inputs.length > 2) return false;
+
+  const text = (el.textContent ?? '').toLowerCase();
+  if (AUTH_MARKERS.some((w) => text.includes(w))) return false;
 
   const hasEmail = Boolean(
     el.querySelector('input[type=email], input[name*="email" i], input[placeholder*="email" i]')
   );
   if (!hasEmail) return false;
 
-  const text = (el.textContent ?? '').toLowerCase();
   return SUBSCRIBE_WORDS.some((w) => text.includes(w));
 }
 
@@ -1767,13 +2336,29 @@ describe('hideCookieBanners', () => {
     expect(document.querySelector('#b').style.display).toBe('none');
   });
 
-  it('ignores body text that merely mentions cookies', () => {
-    mount(`<article id="b"><p>This recipe makes 24 cookies.</p></article>`);
+  // Each negative satisfies every guard EXCEPT the one named, so deleting
+  // that guard flips the test. A fixture failing two guards at once proves
+  // nothing about either.
+  it('ignores cookie language that is not in a fixed or sticky element', () => {
+    // Isolates the position guard: has cookie words AND an accept control.
+    mount(`<div id="b"><p>We use cookies. Read our cookie policy.</p>
+      <button>Accept</button></div>`);
     expect(hideCookieBanners(document)).toBe(0);
   });
 
-  it('ignores a fixed header with no cookie language', () => {
-    mount(`<nav id="b" style="position:fixed;z-index:500">Home About Contact</nav>`);
+  it('ignores a fixed bar with an accept-ish control but no cookie language', () => {
+    // Isolates the cookie-language guard: fixed AND has a matching button.
+    mount(`<nav id="b" style="position:fixed;z-index:500">
+      <button>Accept</button> Home About Contact</nav>`);
+    expect(hideCookieBanners(document)).toBe(0);
+  });
+
+  it('ignores an element too long to be a banner', () => {
+    // Isolates the length cap — the guard that stops us blanking a page
+    // whose whole wrapper happens to mention cookies.
+    const filler = 'lorem ipsum dolor sit amet. '.repeat(80); // > 1200 chars
+    mount(`<div id="b" style="position:fixed;z-index:500">
+      <p>We use cookies. ${filler}</p><button>Accept</button></div>`);
     expect(hideCookieBanners(document)).toBe(0);
   });
 });
@@ -1785,6 +2370,27 @@ describe('restoreScroll', () => {
     restoreScroll(document);
     expect(document.body.style.overflow).toBe('');
     expect(document.documentElement.style.overflow).toBe('');
+  });
+
+  it('clears a fixed body position', () => {
+    document.body.style.position = 'fixed';
+    restoreScroll(document);
+    expect(document.body.style.position).toBe('');
+  });
+
+  it('removes scroll-lock classes', () => {
+    document.body.className = 'modal-open some-app-class no-scroll';
+    restoreScroll(document);
+    expect(document.body.classList.contains('modal-open')).toBe(false);
+    expect(document.body.classList.contains('no-scroll')).toBe(false);
+    // Unrelated classes must survive — we restore scrolling, not restyle.
+    expect(document.body.classList.contains('some-app-class')).toBe(true);
+  });
+
+  it('never adds a restriction to an unlocked page', () => {
+    document.body.style.overflow = 'auto';
+    restoreScroll(document);
+    expect(document.body.style.overflow).toBe('auto');
   });
 });
 ```
@@ -1873,7 +2479,7 @@ git commit -m "feat: cosmetic cookie fallback and scroll restore"
 
 **Interfaces:**
 - Consumes: everything from Tasks 7–12, plus `getSettings`/`isPaused` (Task 2) and the bundle (Task 6).
-- Produces: `createSweeper({ settings, bundle, root })` → `{ sweep(), start(), stop() }`.
+- Produces: `createSweeper({ settings, bundle, root, engine })` → `{ sweep(), start(), stop(), tripped }`. `engine` defaults to `runEngine` and is an explicit constructor dependency, not a mutable property — tests pass a stub through the signature.
 
 Splitting `createSweeper` out from the module's side-effecting entry is what makes the observer loop testable without a browser.
 
@@ -1923,12 +2529,41 @@ describe('sweeper', () => {
     expect(document.body.style.overflow).toBe('');
   });
 
+  // This pair is the guard for the engine/fallback exclusivity. Same fixture,
+  // opposite engine results, opposite outcomes — neither test means anything
+  // without the other, and together they fail if the branches are merged.
+  it('falls back to hiding when the engine found nothing', async () => {
+    mount(`<div id="b" style="position:fixed;z-index:500">
+      We use cookies. <button>Accept</button></div>`);
+    const engine = vi.fn(async () => ({ handled: null, reason: 'no-cmp-detected' }));
+    await createSweeper({ settings: ON, bundle: EMPTY_BUNDLE, engine }).sweep();
+    expect(document.querySelector('#b').style.display).toBe('none');
+  });
+
+  it('does not also hide banners when the engine handled one', async () => {
+    mount(`<div id="b" style="position:fixed;z-index:500">
+      We use cookies. <button>Accept</button></div>`);
+    const engine = vi.fn(async () => ({ handled: 'somecmp', reason: 'ok' }));
+    await createSweeper({ settings: ON, bundle: EMPTY_BUNDLE, engine }).sweep();
+    expect(document.querySelector('#b').style.display).toBe('');
+  });
+
+  it('survives a newsletter scan that throws', async () => {
+    mount(`<div id="x">ordinary</div>`);
+    const engine = vi.fn(async () => ({ handled: null, reason: 'no-cmp-detected' }));
+    const boom = () => { throw new Error('hostile DOM'); };
+    const original = document.querySelectorAll;
+    document.querySelectorAll = boom;
+    const s = createSweeper({ settings: ON, bundle: EMPTY_BUNDLE, engine });
+    await expect(s.sweep()).resolves.toBeUndefined();
+    document.querySelectorAll = original;
+  });
+
   it('stops sweeping a domain after two consecutive errors', async () => {
-    const bundle = { rules: {} };
-    const s = createSweeper({ settings: ON, bundle });
-    s._engine = vi.fn(async () => { throw new Error('boom'); });
+    const engine = vi.fn(async () => { throw new Error('boom'); });
+    const s = createSweeper({ settings: ON, bundle: EMPTY_BUNDLE, engine });
     await s.sweep(); await s.sweep(); await s.sweep();
-    expect(s._engine).toHaveBeenCalledTimes(2);
+    expect(engine).toHaveBeenCalledTimes(2);
     expect(s.tripped).toBe(true);
   });
 });
@@ -1953,12 +2588,11 @@ const QUIET_MS = 10_000;
 const DEBOUNCE_MS = 300;
 const MAX_ERRORS = 2;
 
-export function createSweeper({ settings, bundle, root = document }) {
+export function createSweeper({ settings, bundle, root = document, engine = runEngine }) {
   const state = {
     tripped: false,
     errors: 0,
     handled: false,
-    _engine: (b, r) => runEngine(b, r),
 
     async sweep() {
       if (state.tripped) return;
@@ -1966,13 +2600,15 @@ export function createSweeper({ settings, bundle, root = document }) {
 
       if (settings.cookieBanners && !state.handled) {
         try {
-          const r = await state._engine(bundle, root);
+          const r = await engine(bundle, root);
           state.errors = 0;
-          if (r.handled) { state.handled = true; didSomething = true; }
-          else if (r.reason !== 'no-cmp-detected') {
-            // Rule matched but could not complete — fall back to hiding.
-            didSomething = hideCookieBanners(root) > 0;
+          if (r.handled) {
+            state.handled = true;
+            didSomething = true;
           } else {
+            // Either no rule matched, or one matched but hit an action we
+            // don't implement. Both fall back to hiding — and note the
+            // fallback runs ONLY here, never alongside a successful rule.
             didSomething = hideCookieBanners(root) > 0;
           }
         } catch {
@@ -1982,12 +2618,18 @@ export function createSweeper({ settings, bundle, root = document }) {
       }
 
       if (settings.newsletters) {
-        for (const el of findNewsletterModals(root)) {
-          try { dismissNewsletter(el); didSomething = true; } catch { /* never break the page */ }
-        }
+        try {
+          for (const el of findNewsletterModals(root)) {
+            try { dismissNewsletter(el); didSomething = true; } catch { /* never break the page */ }
+          }
+        } catch { /* a hostile DOM must not escape the sweep */ }
       }
 
-      if (didSomething) restoreScroll(root.ownerDocument ?? document);
+      if (didSomething) {
+        try {
+          restoreScroll(root.ownerDocument ?? document);
+        } catch { /* nothing here is worth breaking a page for */ }
+      }
     },
 
     start() {

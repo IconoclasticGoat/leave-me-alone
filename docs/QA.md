@@ -1,0 +1,143 @@
+# Manual QA Checklist
+
+**Status: NEVER RUN**
+
+This checklist has not been executed. No results below should be interpreted as verified.
+
+---
+
+## Why manual testing?
+
+The `chrome.contentSettings` layer — which enforces the actual browser-level privacy settings (notifications, location, camera, microphone, popups, downloads, sound, cookies) — cannot be tested headlessly or in unit tests. Additionally, real-world consent-management platform (CMP) behavior is vendor-specific and evolves frequently. This checklist documents the verification that must occur in a real Chrome profile against live websites. Unit tests cover the rule engine, heuristics, and decision logic; this checklist covers whether those decisions actually work in the browser.
+
+---
+
+## Setup
+
+Before running any item below:
+- Build the extension: `npm install && npm run build`
+- Load unpacked from `dist/` via `chrome://extensions` with Developer mode on
+- Ensure all toggles in the popup are visible and functional
+- Open the popup when a test requires toggling
+
+---
+
+## Section 1: Chrome Content Settings (Notifications, Location, Camera, Microphone, Popups, Downloads, Sound)
+
+These tests verify that toggling the extension's controls correctly updates the browser's underlying `chrome.contentSettings` API, and that those settings persist across browser restarts.
+
+### Item 1: Notifications setting
+
+- [ ] **Test:** Load unpacked from `dist/`. Navigate to `chrome://settings/content/notifications`. Before opening the popup, confirm the setting shows "Don't allow sites to send notifications."
+- [ ] **Expected result:** The setting is already restricted because the extension sets it on load with the default toggle state.
+
+### Item 2: Notifications toggle
+
+- [ ] **Test:** Open the extension popup. Toggle notifications **off** (disable the toggle). Reload `chrome://settings/content/notifications`. Toggle notifications **on** (enable the toggle) in the popup. Reload the settings page again.
+- [ ] **Expected result:** When the toggle is off, the setting reads "Don't allow sites to send notifications." When the toggle is on, the setting reads "Allow sites to send notifications."
+
+### Item 3: Other content settings (Location, Camera, Microphone, Popups, Automatic Downloads, Sound)
+
+- [ ] **Test:** Repeat the pattern from Item 2 for each setting:
+  - Location: `chrome://settings/content/location`
+  - Camera: `chrome://settings/content/camera`
+  - Microphone: `chrome://settings/content/microphone`
+  - Popups: `chrome://settings/content/popups`
+  - Automatic downloads: `chrome://settings/content/automaticDownloads`
+  - Sound: `chrome://settings/content/sound` (Chrome 141+ only; on older versions, the popup should surface this as unenforced)
+
+- [ ] **Expected result:** Each toggle correctly flips the corresponding setting. The browser UI reflects every change immediately or on reload.
+
+---
+
+## Section 2: Cookie Settings and Session-Only Cookies
+
+### Item 4: Session-only cookies
+
+- [ ] **Test:** Open the extension popup. Toggle session-only cookies **on**. Navigate to `chrome://settings/content/cookies`. Examine the state. Toggle session-only cookies **off** in the popup.
+- [ ] **Expected result:** When enabled, `chrome://settings/content/cookies` shows the session-only cookie state active. When disabled, the setting reverts. Note: enabling this logs the user out of every website on browser restart — this is expected behavior and is why the setting defaults to off.
+
+---
+
+## Section 3: Global Privacy Control Signal
+
+### Item 5: GPC signal detection
+
+- [ ] **Test:** Enable the GPC toggle in the popup. Navigate to `https://global-privacy-control.glitch.me/`. The page displays whether the GPC signal is detected.
+- [ ] **Expected result:** The page confirms the GPC signal is detected. Disable the toggle, reload the page, and confirm the signal is no longer detected.
+
+---
+
+## Section 4: Consent Management Platform (CMP) Enforcement — CORRECTNESS CRITICAL
+
+These tests verify that the extension correctly dismisses consent banners and disables tracking categories on real-world websites using established consent platforms.
+
+### Item 6: CMP banner dismissal and category settings
+
+- [ ] **Test:** Visit the following websites with the extension enabled and cookie-banner toggle **on**. For each, observe whether the banner appears and, if the CMP exposes a preferences interface, whether tracking categories are off:
+  - One site using **OneTrust** (e.g., example.com — verify via Cookiebot admin interface or inspect rules)
+  - One site using **Cookiebot** (e.g., example.com)
+  - One site using **Didomi** (e.g., example.com)
+  - One site using **Usercentrics** (e.g., example.com)
+  - One site using **Quantcast** (e.g., example.com)
+
+- [ ] **Expected result:**
+  - The banner is dismissed and does not reappear on page reload.
+  - If the platform provides a preferences screen or settings interface, confirm that non-essential tracking categories are explicitly disabled (off).
+  - Page layout is unaffected; no content is broken or misaligned.
+
+---
+
+## Section 5: Newsletter Modal Dismissal — CORRECTNESS CRITICAL
+
+### Item 7: Newsletter popup dismissal and page scroll
+
+- [ ] **Test:** Visit five websites known for aggressive newsletter or signup prompts (e.g., news sites, e-commerce sites, blogs). Enable the newsletter-toggle in the popup. Observe whether popups are dismissed and the page is scrollable.
+- [ ] **Expected result:**
+  - Newsletter signup modals are dismissed without user interaction.
+  - The page scrolls freely and the user can read content unobstructed.
+  - The modal does not reappear on page reload (unless the site's own logic resets it).
+
+---
+
+## Section 6: Negative Pass — Do Not Dismiss Non-Consent Elements — CORRECTNESS CRITICAL
+
+### Item 8: Login modals, cart drawers, and age gates remain untouched
+
+- [ ] **Test:** On three different websites, trigger the following user-interface elements while the extension is enabled:
+  - A login or authentication modal
+  - A shopping-cart drawer or panel
+  - An age-gate verification dialog
+
+- [ ] **Expected result:**
+  - **None of these modals are dismissed.** They remain open and functional. The user can interact with them normally (log in, add items, verify age).
+  - The extension must not dismiss or hide login prompts, cart drawers, or age gates under any circumstances.
+
+---
+
+## Section 7: Pause and Resume Functionality
+
+### Item 9: Pause suspends enforcement; resume restores it
+
+- [ ] **Test:** Navigate to a website that displays a consent banner or newsletter modal. Click the pause button in the extension popup. Reload the page.
+- [ ] **Expected result:** The banner or modal appears normally — the extension does not dismiss it.
+
+- [ ] **Test:** Resume the extension (click pause again). Reload the page.
+- [ ] **Expected result:** The extension resumes enforcement. The banner or modal is dismissed again.
+
+---
+
+## Section 8: Chrome Version and Enforcement Coverage
+
+### Item 10: Chrome version and unenforced settings
+
+- [ ] **Test:** Note your current Chrome version (`chrome://version/`).
+- [ ] **Expected result:**
+  - If Chrome is **141 or later**, all toggles (including sound) work in the browser settings.
+  - If Chrome is **before 141**, open the popup and confirm that the sound toggle is labeled or marked as unenforced in the UI. The popup should surface this limitation clearly.
+
+---
+
+## Summary
+
+All items must be verified on a real Chrome profile with the extension loaded and active on real websites. Do not assume any behavior — test each item explicitly. If any item fails, record the failure as a bug report before considering this task complete. Items 6, 7, and 8 are correctness-critical: the extension must dismiss consent modals and newsletters while never dismissing authentication, commerce, or age-verification elements.
