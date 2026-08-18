@@ -77,7 +77,12 @@ describe('stampTab', () => {
     try {
       chrome.action.setIcon = async () => { throw new Error('Unexpected failure'); };
       await expect(stampTab(7, 'https://example.com/', {})).resolves.toBeUndefined();
-      expect(debugSpy).toHaveBeenCalledWith('stampTab failed', expect.objectContaining({ tabId: 7 }));
+      // The icon path is logged too: a persistent failure is almost always a
+      // wrong path, and that should be a one-glance diagnosis.
+      expect(debugSpy).toHaveBeenCalledWith('stampTab failed', expect.objectContaining({
+        tabId: 7,
+        path: expect.objectContaining({ 16: 'icons/active-16.png' }),
+      }));
     } finally {
       debugSpy.mockRestore();
     }

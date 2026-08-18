@@ -42,7 +42,7 @@ export async function stampTab(tabId, url, settings) {
     // Usually a tab that closed between the event and the call landing.
     // Log to catch unexpected failures (e.g. config errors) without breaking
     // the flow.
-    console.debug('stampTab failed', { tabId, error: e });
+    console.debug('stampTab failed', { tabId, path, error: e });
   }
 }
 
