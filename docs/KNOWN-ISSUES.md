@@ -6,15 +6,33 @@ Findings raised during implementation review that were deliberately not fixed. N
 
 ## Behavioural gaps
 
-**Pause writes `ask`, which is not the user's own preference.** Pausing a site
-writes per-origin content-setting exceptions of `ask` (`allow` for `popups`,
-`sound` and `cookies`, which Chrome refuses `ask` for). Extension-set content
-settings sit above the user's own layer, so someone who had deliberately
-allowed notifications for a site and then pauses it gets `ask`, not their
-original grant. This is a real improvement on the previous behaviour, where
-extension settings overrode user grants with no route back at all — the site
-can prompt again and the user can re-grant — but it is not a true restore, and
-no API offers one.
+**Pausing a site writes `ask`, which is not the user's own preference.**
+While a toggle is on, the extension holds `<all_urls>` → `block` for that
+content-setting type, and a paused site needs a more specific pattern to
+outrank it. Chrome offers no way to write "nothing" at a narrower pattern, so
+the exception has to be an actual value: `ask`. Extension-set content settings
+sit above the user's own layer, so someone who had deliberately allowed
+notifications for a site and then pauses it gets `ask`, not their original
+grant. The site can prompt again and the user can re-grant, but it is not a
+true restore, and no API offers one.
+
+This applies only to the paused-site exception. A toggle that is simply **off**
+writes nothing at all — `clear()` returns the type to the user's own settings,
+which is a true restore.
+
+**Pausing a site permits popups on that site.** `popups` accepts only
+`allow`/`block`, so its paused exception can only be `allow` — there is no
+`ask` to fall back to. `sound` is the same, and `cookies` releases to `allow`
+rather than `session_only`. Pause means "behave as the site intends", and for
+these three that is the literal effect: a paused site may open popups the
+extension would otherwise have blocked.
+
+**`applyAll` runs are serialised, not atomic.** `chrome.storage.onChanged`
+fires once per write, so rapid toggling queues several full reconciliations.
+The queue in `src/background/index.js` stops them interleaving, but each run
+still leaves a brief window in which a type has been cleared and not yet
+rewritten, and a queued run reads settings when it starts rather than when it
+was scheduled.
 
 **Toolbar signalling is invisible when the extension is unpinned.** An
 extension living in the puzzle-piece overflow menu shows neither its icon
@@ -56,7 +74,7 @@ batching if that list grew into the hundreds.
 
 ## Test coverage gaps
 
-- `src/background/index.js` has no tests at all. Deleting the `chrome.storage.onChanged → applyAll()` wiring leaves the suite green, and that line is what makes every toggle take effect.
+- `src/background/index.js` is only partly tested. `test/background.test.js` covers the scheduler and the `chrome.storage.onChanged → schedule()` wiring; the `tabs.onUpdated` / `tabs.onActivated` stamping listeners still have no test.
 - The CMP method sequence is unpinned: reducing `ORDER` to `['DO_CONSENT']` passes. On a real site that means categories are unticked but never submitted — the extension appears to do nothing while tests stay green.
 - Only 1 of 202 vendored rules (Cookiebot) has an integration fixture.
 - The evaluation-time guard in `createMatcher` — a Critical fix during implementation — has no test; deleting it leaves the suite green.

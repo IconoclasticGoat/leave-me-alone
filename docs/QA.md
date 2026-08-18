@@ -136,6 +136,28 @@ These tests verify that the extension correctly dismisses consent banners and di
 - [ ] **Test:** Pause `example.com`, then visit `sub.example.com`.
       **Expect:** paused there too.
 
+### Item 9b: A toggle that is off leaves no extension-controlled setting
+
+The failure this catches: writing a release value at `<all_urls>` when a
+toggle is off puts the extension's preference *above* the user's own, and for
+cookies and popups that value is `allow`. A default install would then
+force-allow cookies browser-wide. Nothing but this check surfaces it.
+
+- [ ] **Test:** On a **fresh profile**, load the unpacked extension and,
+      without touching the popup, open `chrome://settings/content/cookies`.
+      **Expect:** no "controlled by an extension" banner and no extension-set
+      cookie state — `sessionOnlyCookies` is off by default, so the extension
+      must have written nothing.
+- [ ] **Test:** Same profile, open `chrome://settings/content/popups`.
+      Then turn "Block popups & automatic downloads" **off** in the popup and
+      reload the settings page. **Expect:** Chrome's own default (block) is
+      still in force and no extension banner appears. The extension must never
+      make popups *more* permitted than Chrome's default.
+- [ ] **Test:** Turn a toggle on, confirm the extension banner appears on the
+      matching `chrome://settings/content/...` page, then turn it off again.
+      **Expect:** the banner disappears and the setting returns to whatever
+      the user had chosen before, not to `ask` or `allow`.
+
 ### Item 10: Icon and tooltip track the active tab
 
 - [ ] **Test:** Pin the extension. Open a normal site and a paused site in two
@@ -158,6 +180,20 @@ These tests verify that the extension correctly dismisses consent banners and di
       toggles that cannot be clicked.
 - [ ] **Test:** Open the popup on a normal site. **Expect:** no banner,
       interactive toggles, and "Pause on <host>" at the bottom.
+
+### Item 11b: Resume button spacing — measure it, no test can
+
+jsdom performs no layout, so the equal-spacing invariant on the Resume button
+has no automated guard at all. Re-run this after **any** change to
+`popup/popup.css`.
+
+- [ ] **Test:** Open the popup on a paused site, inspect the Resume button in
+      DevTools, and read its computed `margin-top` and `margin-bottom`.
+      **Expect:** 12px and 12px (0.75rem at a 16px root). Both come from the
+      single `margin-block` declaration on `#pause.primary`; if either reads
+      differently, the base `#pause` rule has leaked into the paused layout.
+- [ ] **Test:** While there, confirm by eye that the button sits as its own
+      band — equal air above it to the banner and below it to the toggles.
 
 ---
 
