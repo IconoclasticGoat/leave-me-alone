@@ -9,9 +9,11 @@
   "scripts": {
     "build": "node build.mjs",
     "test": "vitest run",
-    "bundle-rules": "node scripts/bundle-rules.mjs"
+    "bundle-rules": "node scripts/bundle-rules.mjs",
+    "icons": "node scripts/build-icons.mjs"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "esbuild": "^0.28.2",
     "jsdom": "^24.0.0",
     "vitest": "^4.1.11"
