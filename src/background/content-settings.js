@@ -15,6 +15,10 @@ const MAP = [
 // being granted on their behalf.
 const NO_ASK = new Set(['popups', 'sound', 'cookies']);
 
+// Only used for the paused-domain exception, where a value *must* be written:
+// a paused site needs a pattern that outranks our own '<all_urls>' block, and
+// there is no way to write "nothing" at a narrower pattern. A toggle that is
+// simply off writes nothing at all — see applyContentSettings.
 export function releaseValueFor(type) {
   return NO_ASK.has(type) ? 'allow' : 'ask';
 }
@@ -29,6 +33,8 @@ export function patternsFor(domain) {
   ];
 }
 
+const messageOf = (e) => e?.message ?? String(e);
+
 export async function applyContentSettings(settings) {
   const ok = [];
   const failed = [];
@@ -42,22 +48,50 @@ export async function applyContentSettings(settings) {
         // reconciliation: wipe what we wrote last time, then rewrite it.
         // Without this, unpausing would leave its exception behind forever.
         await chrome.contentSettings[type].clear({});
+
+        // Toggle off: write nothing. Extension-set content settings outrank
+        // the user's own layer, so writing a release value here would push
+        // *our* preference over theirs — and for cookies and popups that
+        // release value is 'allow', which would leave the browser weaker
+        // than if this extension had never been installed. clear() alone
+        // hands the type back to the user's own settings.
+        if (global === null) {
+          ok.push(type);
+          continue;
+        }
+
         await chrome.contentSettings[type].set({
           primaryPattern: '<all_urls>',
-          setting: global ?? releaseValueFor(type),
+          setting: global,
         });
+
+        // Each paused domain gets its own try/catch: one pattern Chrome
+        // rejects (an IP literal, a trailing-dot host) must not silently
+        // drop the exemptions for every domain after it, because the global
+        // block above is already in force and the toolbar icon is already
+        // claiming the site is paused.
+        let partial = false;
         for (const domain of paused) {
           for (const primaryPattern of patternsFor(domain)) {
-            await chrome.contentSettings[type].set({
-              primaryPattern,
-              setting: releaseValueFor(type),
-            });
+            try {
+              await chrome.contentSettings[type].set({
+                primaryPattern,
+                setting: releaseValueFor(type),
+              });
+            } catch (e) {
+              partial = true;
+              failed.push({
+                type,
+                settingKey: key,
+                error: `${messageOf(e)} (pattern ${primaryPattern})`,
+              });
+            }
           }
         }
-        ok.push(type);
+        if (!partial) ok.push(type);
       } catch (e) {
         // `sound` requires Chrome 141+; older builds reject it. Report, don't throw.
-        failed.push({ type, settingKey: key, error: e?.message ?? String(e) });
+        failed.push({ type, settingKey: key, error: messageOf(e) });
       }
     }
   }

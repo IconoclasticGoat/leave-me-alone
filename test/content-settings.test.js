@@ -1,5 +1,6 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { applyContentSettings, releaseValueFor, patternsFor } from '../src/background/content-settings.js';
+import { DEFAULTS } from '../src/settings.js';
 
 let calls, cleared;
 const stub = (name) => ({
@@ -51,11 +52,39 @@ describe('applyContentSettings', () => {
     expect(calls).toContainEqual(['location', 'block', '<all_urls>']);
   });
 
-  it('releases to ask, not allow, when a toggle is off', async () => {
-    // Writing 'allow' here would override the user's own per-site blocks
-    // with no route back. 'ask' hands the decision to Chrome's dialog.
+  it('clears a type whose toggle is off and then writes nothing at all', async () => {
+    // Extension-set content settings outrank the user's own layer, so any
+    // value written here — 'ask' included — pushes our preference over
+    // theirs. clear() alone returns the type to the user's own settings,
+    // which is the only honest thing an off toggle can do.
     await applyContentSettings({ notifications: false });
-    expect(calls).toContainEqual(['notifications', 'ask', '<all_urls>']);
+    expect(cleared).toContain('notifications');
+    expect(calls.filter(([type]) => type === 'notifications')).toEqual([]);
+  });
+
+  it('never force-allows cookies with the stock default of sessionOnlyCookies off', async () => {
+    // The default install path. Writing 'allow' at <all_urls> here would
+    // hand every site a blanket cookie grant that beats the user's own
+    // cookie preferences — the exact inverse of what this extension is for.
+    await applyContentSettings({ ...DEFAULTS, pausedSites: [] });
+    expect(cleared).toContain('cookies');
+    expect(calls.filter(([type]) => type === 'cookies')).toEqual([]);
+  });
+
+  it('never force-allows popups when the popups toggle is off', async () => {
+    // Chrome's own default for popups is *block*. Writing 'allow' would
+    // leave the browser weaker than if the extension were not installed.
+    await applyContentSettings({ popupsDownloads: false });
+    expect(cleared).toContain('popups');
+    expect(calls.filter(([type]) => type === 'popups')).toEqual([]);
+    expect(calls.filter(([type]) => type === 'automaticDownloads')).toEqual([]);
+  });
+
+  it('writes no paused-domain exceptions for a type whose toggle is off', async () => {
+    // Nothing is blocking, so there is nothing to exempt from — and each
+    // exception would be another override of the user's own settings.
+    await applyContentSettings({ notifications: false, pausedSites: ['example.com'] });
+    expect(calls).toEqual([]);
   });
 
   it('uses session_only, not block, for cookies', async () => {
@@ -133,6 +162,37 @@ describe('applyContentSettings', () => {
       { type: 'notifications', settingKey: 'notifications', error: 'clear failed' },
     ]);
     expect(calls).toContainEqual(['location', 'block', '<all_urls>']);
+  });
+
+  it('keeps writing later paused domains after one pattern is rejected', async () => {
+    // Chrome's match-pattern parser rejects IP literals and trailing-dot
+    // hosts. Sharing one try/catch with the whole type meant a single bad
+    // domain dropped every exemption after it while the global block stayed
+    // in force — a site the icon calls paused, still being blocked.
+    const bad = 'http://192.168.1.1/*';
+    const real = chrome.contentSettings.location.set;
+    chrome.contentSettings.location.set = vi.fn(async (arg) => {
+      if (arg.primaryPattern === bad) throw new Error('invalid pattern');
+      return real(arg);
+    });
+
+    const r = await applyContentSettings({
+      location: true,
+      pausedSites: ['192.168.1.1', 'later.com'],
+    });
+
+    // The domain after the failure still gets its full exemption set.
+    for (const p of patternsFor('later.com')) {
+      expect(calls).toContainEqual(['location', 'ask', p]);
+    }
+    // And so do the patterns of the bad domain that Chrome did accept.
+    expect(calls).toContainEqual(['location', 'ask', 'https://192.168.1.1/*']);
+    // The failure is reported rather than swallowed.
+    expect(r.failed).toHaveLength(1);
+    expect(r.failed[0]).toMatchObject({ type: 'location', settingKey: 'location' });
+    expect(r.failed[0].error).toContain(bad);
+    // A type with a missing exemption is not reported as fully applied.
+    expect(r.ok).not.toContain('location');
   });
 
   it('survives a rejection that is not an Error', async () => {
