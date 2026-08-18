@@ -117,19 +117,53 @@ These tests verify that the extension correctly dismisses consent banners and di
 
 ## Section 7: Pause and Resume Functionality
 
-### Item 9: Pause suspends enforcement; resume restores it
+### Item 9: Pause suspends every layer; resume restores it
 
-- [ ] **Test:** Navigate to a website that displays a consent banner or newsletter modal. Click the pause button in the extension popup. Reload the page.
-- [ ] **Expected result:** The banner or modal appears normally — the extension does not dismiss it.
+- [ ] **Test:** On a site with a consent banner, click pause, then reload.
+      **Expect:** the banner appears and stays.
+- [ ] **Test:** With pause still on, open DevTools and check a request's
+      headers. **Expect:** no `Sec-GPC` header.
+- [ ] **Test:** Run `navigator.globalPrivacyControl` in the console.
+      **Expect:** `undefined`, not `true`.
+- [ ] **Test:** With "Block notification prompts" on globally, visit a paused
+      site that requests notifications. **Expect:** Chrome's own permission
+      prompt appears rather than a silent block.
+- [ ] **Test:** Check `chrome://settings/content/notifications`.
+      **Expect:** an entry for the paused domain, set to Ask.
+- [ ] **Test:** Resume the site and reload. **Expect:** the banner is
+      dismissed again, `Sec-GPC` returns, and the per-domain content-setting
+      entry is gone.
+- [ ] **Test:** Pause `example.com`, then visit `sub.example.com`.
+      **Expect:** paused there too.
 
-- [ ] **Test:** Resume the extension (click pause again). Reload the page.
-- [ ] **Expected result:** The extension resumes enforcement. The banner or modal is dismissed again.
+### Item 10: Icon and tooltip track the active tab
+
+- [ ] **Test:** Pin the extension. Open a normal site and a paused site in two
+      tabs and switch between them. **Expect:** the icon changes to the tilted
+      bar on the paused tab and back, without a reload.
+- [ ] **Test:** Hover the icon on a paused tab. **Expect:**
+      "Leave Me Alone — paused on <host>".
+- [ ] **Test:** Open a `chrome://` page. **Expect:** the active icon, no error
+      in the service worker console.
+- [ ] **Test:** Check the icon against both a light and a dark Chrome theme.
+      **Expect:** both tints stay legible at 16px. This is the single-palette
+      compromise — MV3 gives no toolbar-theme signal.
+- [ ] **Test:** Pause a site, then quit and reopen Chrome. **Expect:** the
+      paused icon is restored on that tab.
+
+### Item 11: Popup reflects paused state
+
+- [ ] **Test:** Open the popup on a paused site. **Expect:** a banner naming
+      the host, the explanatory sentence, a primary Resume button, and dimmed
+      toggles that cannot be clicked.
+- [ ] **Test:** Open the popup on a normal site. **Expect:** no banner,
+      interactive toggles, and "Pause on <host>" at the bottom.
 
 ---
 
 ## Section 8: Chrome Version and Enforcement Coverage
 
-### Item 10: Chrome version and unenforced settings
+### Item 12: Chrome version and unenforced settings
 
 - [ ] **Test:** Note your current Chrome version (`chrome://version/`).
 - [ ] **Expected result:**

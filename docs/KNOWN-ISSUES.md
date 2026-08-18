@@ -6,7 +6,25 @@ Findings raised during implementation review that were deliberately not fixed. N
 
 ## Behavioural gaps
 
-**Pause only covers the DOM layer.** "Pause on this site" stops cookie-banner and newsletter dismissal, but the site still receives `Sec-GPC`, still has one-tap and chat widgets blocked, and still has notifications, location, and camera blocked by `chrome.contentSettings`. Those are set with `primaryPattern: '<all_urls>'`, and extension-set content settings override the user's own per-site grants — so a user who deliberately allowed notifications from their calendar app loses them, with no route back through the site, Chrome settings, or the pause button. Fixing it means writing a per-origin `allow` exception on pause.
+**Pause writes `ask`, which is not the user's own preference.** Pausing a site
+writes per-origin content-setting exceptions of `ask` (`allow` for `popups`,
+`sound` and `cookies`, which Chrome refuses `ask` for). Extension-set content
+settings sit above the user's own layer, so someone who had deliberately
+allowed notifications for a site and then pauses it gets `ask`, not their
+original grant. This is a real improvement on the previous behaviour, where
+extension settings overrode user grants with no route back at all — the site
+can prompt again and the user can re-grant — but it is not a true restore, and
+no API offers one.
+
+**Toolbar signalling is invisible when the extension is unpinned.** An
+extension living in the puzzle-piece overflow menu shows neither its icon
+state nor a badge. The popup's paused banner is the only signal those users
+get.
+
+**Content-setting reconciliation is O(types x paused sites).** Every settings
+change clears and rewrites all eight content-setting types, plus four patterns
+per paused domain per type. Fine for a normal paused list; it would need
+batching if that list grew into the hundreds.
 
 **The GPC property is set too late to be read.** `gpc-inject.js` awaits `chrome.storage.sync` before injecting, and the injected `<script src=…>` is async, so `navigator.globalPrivacyControl` lands tens of milliseconds after the page's own head scripts have run. CMPs read GPC at init, so the property half of the signal is likely a no-op in practice. The `Sec-GPC` header — the half that carries legal weight under CCPA/CPRA — is unaffected. A manifest-declared `"world": "MAIN"` content script at `document_start` would fix it, at the cost of not being able to read the toggle.
 
@@ -14,7 +32,7 @@ Findings raised during implementation review that were deliberately not fixed. N
 
 **Newsletter heuristic residuals.** A cart drawer carrying both a discount code and an email input is dismissed. Commerce vetoes (`your bag`, `checkout`, `subtotal`) would close it. The heuristic is phrase-based and will never be exhaustive; per-site pause is the designed escape hatch.
 
-**`stripWww` is not a public-suffix list.** Pause strips a leading `www.` only — `m.example.com` and `www2.example.com` are treated as distinct domains. True eTLD+1 needs a PSL, which this zero-dependency build does not carry.
+**`stripWww` is not a public-suffix list.** Pause strips a leading `www.` only — `m.example.com` and `www2.example.com` are treated as distinct domains. True eTLD+1 needs a PSL, which this zero-dependency build does not carry. This now governs the `declarativeNetRequest` domain exclusions and the content-setting patterns as well, not just DOM-layer pause.
 
 ## Performance
 
