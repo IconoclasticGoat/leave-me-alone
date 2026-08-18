@@ -9,22 +9,89 @@ const MAP = [
   { key: 'sessionOnlyCookies', types: ['cookies'],                     blocked: 'session_only' },
 ];
 
+// Chrome rejects 'ask' for these three — popups and sound take only
+// allow/block, cookies takes allow/block/session_only. Everything else
+// releases to 'ask' so the decision goes back to the user rather than
+// being granted on their behalf.
+const NO_ASK = new Set(['popups', 'sound', 'cookies']);
+
+// Only used for the paused-domain exception, where a value *must* be written:
+// a paused site needs a pattern that outranks our own '<all_urls>' block, and
+// there is no way to write "nothing" at a narrower pattern. A toggle that is
+// simply off writes nothing at all — see applyContentSettings.
+export function releaseValueFor(type) {
+  return NO_ASK.has(type) ? 'allow' : 'ask';
+}
+
+// A paused site needs a pattern more specific than '<all_urls>' to win.
+// Both schemes, and both the bare domain and its subdomains, matching how
+// isPaused() treats a stored domain.
+export function patternsFor(domain) {
+  return [
+    `http://${domain}/*`, `https://${domain}/*`,
+    `http://*.${domain}/*`, `https://*.${domain}/*`,
+  ];
+}
+
+const messageOf = (e) => e?.message ?? String(e);
+
 export async function applyContentSettings(settings) {
   const ok = [];
   const failed = [];
+  const paused = settings.pausedSites ?? [];
 
   for (const { key, types, blocked } of MAP) {
-    const setting = settings[key] ? blocked : 'allow';
+    const global = settings[key] ? blocked : null;
     for (const type of types) {
       try {
+        // No API removes a single pattern, so every apply is a full
+        // reconciliation: wipe what we wrote last time, then rewrite it.
+        // Without this, unpausing would leave its exception behind forever.
+        await chrome.contentSettings[type].clear({});
+
+        // Toggle off: write nothing. Extension-set content settings outrank
+        // the user's own layer, so writing a release value here would push
+        // *our* preference over theirs — and for cookies and popups that
+        // release value is 'allow', which would leave the browser weaker
+        // than if this extension had never been installed. clear() alone
+        // hands the type back to the user's own settings.
+        if (global === null) {
+          ok.push(type);
+          continue;
+        }
+
         await chrome.contentSettings[type].set({
           primaryPattern: '<all_urls>',
-          setting,
+          setting: global,
         });
-        ok.push(type);
+
+        // Each paused domain gets its own try/catch: one pattern Chrome
+        // rejects (an IP literal, a trailing-dot host) must not silently
+        // drop the exemptions for every domain after it, because the global
+        // block above is already in force and the toolbar icon is already
+        // claiming the site is paused.
+        let partial = false;
+        for (const domain of paused) {
+          for (const primaryPattern of patternsFor(domain)) {
+            try {
+              await chrome.contentSettings[type].set({
+                primaryPattern,
+                setting: releaseValueFor(type),
+              });
+            } catch (e) {
+              partial = true;
+              failed.push({
+                type,
+                settingKey: key,
+                error: `${messageOf(e)} (pattern ${primaryPattern})`,
+              });
+            }
+          }
+        }
+        if (!partial) ok.push(type);
       } catch (e) {
         // `sound` requires Chrome 141+; older builds reject it. Report, don't throw.
-        failed.push({ type, settingKey: key, error: e?.message ?? String(e) });
+        failed.push({ type, settingKey: key, error: messageOf(e) });
       }
     }
   }

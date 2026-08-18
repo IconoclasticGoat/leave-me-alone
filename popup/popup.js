@@ -1,4 +1,4 @@
-import { getSettings, setSetting, pauseSite, unpauseSite, isPaused } from '../src/settings.js';
+import { getSettings, setSetting, pauseSite, unpauseSite, isPaused, isPausableHost } from '../src/settings.js';
 
 export const TOGGLE_GROUPS = {
   primary: [
@@ -19,7 +19,7 @@ export const TOGGLE_GROUPS = {
   ],
 };
 
-export function renderToggles(container, settings) {
+export function renderToggles(container, settings, { disabled = false } = {}) {
   container.textContent = '';
   for (const [group, toggles] of Object.entries(TOGGLE_GROUPS)) {
     const section = document.createElement('section');
@@ -32,6 +32,7 @@ export function renderToggles(container, settings) {
       input.type = 'checkbox';
       input.id = `toggle-${t.key}`;
       input.checked = Boolean(settings[t.key]);
+      input.disabled = disabled;
       input.addEventListener('change', () => setSetting(t.key, input.checked));
 
       const span = document.createElement('span');
@@ -50,17 +51,59 @@ export function renderToggles(container, settings) {
   }
 }
 
+/**
+ * Paints the paused banner and positions the single pause/resume button.
+ * Kept separate from init() so it can be tested without stubbing chrome.tabs.
+ */
+export function applyPausedState(doc, host, paused) {
+  const btn = doc.querySelector('#pause');
+  const status = doc.querySelector('#status');
+  status.textContent = '';
+  btn.textContent = paused ? `Resume on ${host}` : `Pause on ${host}`;
+  btn.classList.toggle('primary', paused);
+  if (!paused) return;
+
+  const banner = doc.createElement('div');
+  banner.className = 'banner';
+
+  const icon = doc.createElement('img');
+  icon.src = '../icons/paused-48.png';
+  icon.width = 26;
+  icon.height = 26;
+  icon.alt = '';
+
+  const text = doc.createElement('div');
+  const title = doc.createElement('div');
+  title.className = 'banner-title';
+  title.textContent = `Paused on ${host}`;
+  const detail = doc.createElement('div');
+  detail.className = 'banner-detail';
+  detail.textContent =
+    'Nothing is being blocked here. Cookie banners, prompts, and trackers all behave as the site intends.';
+  text.append(title, detail);
+
+  banner.append(icon, text);
+  status.append(banner, btn);
+}
+
 async function init() {
   const settings = await getSettings();
-  renderToggles(document.querySelector('#toggles'), settings);
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const host = tab?.url ? new URL(tab.url).hostname : null;
-  const btn = document.querySelector('#pause');
-  if (!host) { btn.hidden = true; return; }
+  const paused = host ? isPaused(settings, host) : false;
 
-  const paused = isPaused(settings, host);
-  btn.textContent = paused ? `Resume on ${host}` : `Pause on ${host}`;
+  const container = document.querySelector('#toggles');
+  renderToggles(container, settings, { disabled: paused });
+  container.classList.toggle('paused-toggles', paused);
+
+  const btn = document.querySelector('#pause');
+  // No host, or a host pauseSite would refuse to store (a failed navigation
+  // can leave "http://*.com/" on the tab, which URL parses happily). Offering
+  // a button that silently does nothing is worse than offering none.
+  if (!host || !isPausableHost(host)) { btn.hidden = true; return; }
+
+  applyPausedState(document, host, paused);
   btn.addEventListener('click', async () => {
     await (paused ? unpauseSite(host) : pauseSite(host));
     window.close();

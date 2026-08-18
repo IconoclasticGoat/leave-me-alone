@@ -117,19 +117,89 @@ These tests verify that the extension correctly dismisses consent banners and di
 
 ## Section 7: Pause and Resume Functionality
 
-### Item 9: Pause suspends enforcement; resume restores it
+### Item 9: Pause suspends every layer; resume restores it
 
-- [ ] **Test:** Navigate to a website that displays a consent banner or newsletter modal. Click the pause button in the extension popup. Reload the page.
-- [ ] **Expected result:** The banner or modal appears normally — the extension does not dismiss it.
+- [ ] **Test:** On a site with a consent banner, click pause, then reload.
+      **Expect:** the banner appears and stays.
+- [ ] **Test:** With pause still on, open DevTools and check a request's
+      headers. **Expect:** no `Sec-GPC` header.
+- [ ] **Test:** Run `navigator.globalPrivacyControl` in the console.
+      **Expect:** `undefined`, not `true`.
+- [ ] **Test:** With "Block notification prompts" on globally, visit a paused
+      site that requests notifications. **Expect:** Chrome's own permission
+      prompt appears rather than a silent block.
+- [ ] **Test:** Check `chrome://settings/content/notifications`.
+      **Expect:** an entry for the paused domain, set to Ask.
+- [ ] **Test:** Resume the site and reload. **Expect:** the banner is
+      dismissed again, `Sec-GPC` returns, and the per-domain content-setting
+      entry is gone.
+- [ ] **Test:** Pause `example.com`, then visit `sub.example.com`.
+      **Expect:** paused there too.
 
-- [ ] **Test:** Resume the extension (click pause again). Reload the page.
-- [ ] **Expected result:** The extension resumes enforcement. The banner or modal is dismissed again.
+### Item 9b: A toggle that is off leaves no extension-controlled setting
+
+The failure this catches: writing a release value at `<all_urls>` when a
+toggle is off puts the extension's preference *above* the user's own, and for
+cookies and popups that value is `allow`. A default install would then
+force-allow cookies browser-wide. Nothing but this check surfaces it.
+
+- [ ] **Test:** On a **fresh profile**, load the unpacked extension and,
+      without touching the popup, open `chrome://settings/content/cookies`.
+      **Expect:** no "controlled by an extension" banner and no extension-set
+      cookie state — `sessionOnlyCookies` is off by default, so the extension
+      must have written nothing.
+- [ ] **Test:** Same profile, open `chrome://settings/content/popups`.
+      Then turn "Block popups & automatic downloads" **off** in the popup and
+      reload the settings page. **Expect:** Chrome's own default (block) is
+      still in force and no extension banner appears. The extension must never
+      make popups *more* permitted than Chrome's default.
+- [ ] **Test:** Turn a toggle on, confirm the extension banner appears on the
+      matching `chrome://settings/content/...` page, then turn it off again.
+      **Expect:** the banner disappears and the setting returns to whatever
+      the user had chosen before, not to `ask` or `allow`.
+
+### Item 10: Icon and tooltip track the active tab
+
+- [ ] **Test:** Pin the extension. Open a normal site and a paused site in two
+      tabs and switch between them. **Expect:** the icon changes to the tilted
+      bar on the paused tab and back, without a reload.
+- [ ] **Test:** Hover the icon on a paused tab. **Expect:**
+      "Leave Me Alone — paused on <host>".
+- [ ] **Test:** Open a `chrome://` page. **Expect:** the active icon, no error
+      in the service worker console.
+- [ ] **Test:** Check the icon against both a light and a dark Chrome theme.
+      **Expect:** both tints stay legible at 16px. This is the single-palette
+      compromise — MV3 gives no toolbar-theme signal.
+- [ ] **Test:** Pause a site, then quit and reopen Chrome. **Expect:** the
+      paused icon is restored on that tab.
+
+### Item 11: Popup reflects paused state
+
+- [ ] **Test:** Open the popup on a paused site. **Expect:** a banner naming
+      the host, the explanatory sentence, a primary Resume button, and dimmed
+      toggles that cannot be clicked.
+- [ ] **Test:** Open the popup on a normal site. **Expect:** no banner,
+      interactive toggles, and "Pause on <host>" at the bottom.
+
+### Item 11b: Resume button spacing — measure it, no test can
+
+jsdom performs no layout, so the equal-spacing invariant on the Resume button
+has no automated guard at all. Re-run this after **any** change to
+`popup/popup.css`.
+
+- [ ] **Test:** Open the popup on a paused site, inspect the Resume button in
+      DevTools, and read its computed `margin-top` and `margin-bottom`.
+      **Expect:** 12px and 12px (0.75rem at a 16px root). Both come from the
+      single `margin-block` declaration on `#pause.primary`; if either reads
+      differently, the base `#pause` rule has leaked into the paused layout.
+- [ ] **Test:** While there, confirm by eye that the button sits as its own
+      band — equal air above it to the banner and below it to the toggles.
 
 ---
 
 ## Section 8: Chrome Version and Enforcement Coverage
 
-### Item 10: Chrome version and unenforced settings
+### Item 12: Chrome version and unenforced settings
 
 - [ ] **Test:** Note your current Chrome version (`chrome://version/`).
 - [ ] **Expected result:**

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <mask id="bar">
+    <rect width="48" height="48" fill="#fff"/>
+    <rect x="11" y="21" width="26" height="6" rx="3" fill="#000" transform="rotate(-30 24 24)"/>
+  </mask>
+  <circle cx="24" cy="24" r="20" fill="#9aa0a6" mask="url(#bar)"/>
+</svg>

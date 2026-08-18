@@ -23,4 +23,12 @@ describe('manifest', () => {
   it('has a service worker of type module', () => {
     expect(m.background.type).toBe('module');
   });
+
+  it('declares the active icon as its default at every size', () => {
+    // A tab the service worker has not stamped yet must look active, not blank.
+    for (const size of ['16', '32', '48', '128']) {
+      expect(m.icons[size]).toBe(`icons/active-${size}.png`);
+      expect(m.action.default_icon[size]).toBe(`icons/active-${size}.png`);
+    }
+  });
 });

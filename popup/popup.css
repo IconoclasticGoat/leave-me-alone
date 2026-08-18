@@ -49,3 +49,54 @@ h1 {
   margin-top: 0.75rem;
   padding: 0.4rem;
 }
+
+h1 img {
+  vertical-align: -2px;
+  margin-right: 0.15rem;
+}
+
+/* No margin-bottom here: #pause is a <button> (display: inline-block),
+   so its own margin-top does not collapse with this rule's margin-bottom —
+   they would stack instead of overlapping. The gap between banner and button
+   comes solely from #pause.primary's margin-block; adding one here would
+   double it. */
+.banner {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.55rem;
+  align-items: start;
+  background: #f1f1f4;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0.55rem 0.6rem;
+}
+
+.banner-title {
+  font-weight: 700;
+}
+
+.banner-detail {
+  color: #5f6368;
+  font-size: 0.75rem;
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
+/* Equal breathing room above and below — 12px each at a 16px root — so
+   Resume reads as its own band rather than leaning against the toggle list.
+   Both margins live here, on purpose: split across this rule and the base
+   #pause rule, the symmetry could be broken by someone tuning the *unpaused*
+   button's spacing, and jsdom does no layout so no unit test can catch it.
+   This comment and this one declaration are the whole guard. */
+#pause.primary {
+  background: #5b60d6;
+  border: 1px solid #5b60d6;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 4px;
+  margin-block: 0.75rem;
+}
+
+.paused-toggles {
+  opacity: .42;
+}

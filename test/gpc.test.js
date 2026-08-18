@@ -25,4 +25,19 @@ describe('injectGpc', () => {
     injectGpc(document, { gpc: true });
     expect(document.querySelectorAll('script[src*="gpc-main.js"]')).toHaveLength(1);
   });
+
+  it('injects nothing on a paused host', () => {
+    injectGpc(document, { gpc: true, pausedSites: ['example.com'] }, 'example.com');
+    expect(document.querySelector('script[src*="gpc-main.js"]')).toBe(null);
+  });
+
+  it('injects nothing on a subdomain of a paused host', () => {
+    injectGpc(document, { gpc: true, pausedSites: ['example.com'] }, 'www.example.com');
+    expect(document.querySelector('script[src*="gpc-main.js"]')).toBe(null);
+  });
+
+  it('still injects on a host that is not paused', () => {
+    injectGpc(document, { gpc: true, pausedSites: ['other.com'] }, 'example.com');
+    expect(document.querySelector('script[src*="gpc-main.js"]')).not.toBe(null);
+  });
 });

@@ -1,10 +1,11 @@
 // ISOLATED world, document_start
-import { getSettings } from '../settings.js';
+import { getSettings, isPaused } from '../settings.js';
 
 const MARKER = 'data-lma-gpc';
 
-export function injectGpc(doc, settings) {
+export function injectGpc(doc, settings, hostname = location.hostname) {
   if (!settings?.gpc) return null;
+  if (isPaused(settings, hostname)) return null;
   if (doc.querySelector(`script[${MARKER}]`)) return null;
 
   const el = doc.createElement('script');
