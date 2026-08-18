@@ -41,7 +41,7 @@ Below ~18° a tilt reads as an export error rather than a state, and is indistin
 
 Chrome offers no way to remove a single content-setting pattern; `clear()` wipes everything the extension set for a type. So pause cannot make the extension step aside — it must *write* a value. `allow` would hand the site a permission the user never granted. `ask` returns the decision to the user through Chrome's own dialog.
 
-`sound` and `cookies` have no `ask` state and fall back to `allow`.
+Three types have no `ask` state and fall back to `allow`: `popups` and `sound` accept only `allow`/`block`, and `cookies` accepts `allow`/`block`/`session_only`. Sending them `ask` throws, which would land in `lastApplyErrors` rather than being enforced.
 
 This also corrects existing behaviour. [content-settings.js:22](../../../src/background/content-settings.js) currently writes `allow` at `<all_urls>` whenever a toggle is **off**, so turning off "Block notification prompts" force-allows notifications everywhere and overrides the user's own per-site blocks. Toggle-off becomes `ask` too.
 
@@ -54,8 +54,8 @@ The three enforcement layers from the original design are unchanged. Each gains 
 `applyContentSettings` becomes a full reconciliation, because there is no per-pattern removal:
 
 1. `clear()` each mapped type.
-2. Write `<all_urls>` → `block` when the toggle is on, `ask` when off (`allow` for `sound` and `cookies`).
-3. For each paused domain, write a more specific pattern → `ask` (`allow` for `sound` and `cookies`).
+2. Write `<all_urls>` → `block` when the toggle is on, `ask` when off (`allow` for `popups`, `sound`, and `cookies`).
+3. For each paused domain, write a more specific pattern → `ask` (`allow` for `popups`, `sound`, and `cookies`).
 
 More specific patterns take precedence over `<all_urls>`, so the paused site's rule wins. Patterns are written for both `http` and `https` against `*.<domain>`; the exact subdomain semantics of Chrome's content-setting patterns are a QA item.
 
@@ -105,7 +105,7 @@ Generated PNGs are committed, so `npm run build` never needs the rasteriser. `np
 
 Existing suite is 135 unit tests under vitest with jsdom. New coverage:
 
-- **content-settings** — paused domains produce per-origin `ask` writes; toggle-off writes `ask` at `<all_urls>`; `sound` and `cookies` fall back to `allow`; per-type failures still reach `lastApplyErrors`; reconciliation clears before writing.
+- **content-settings** — paused domains produce per-origin `ask` writes; toggle-off writes `ask` at `<all_urls>`; `popups`, `sound`, and `cookies` fall back to `allow`; per-type failures still reach `lastApplyErrors`; reconciliation clears before writing.
 - **rulesets** — dynamic rules carry both exclusion keys when sites are paused, omit them when none are; rule ids stay stable across rebuilds.
 - **gpc-inject** — returns null on a paused host, injects otherwise.
 - **action** — icon and title selected per tab from hostname, including subdomain matching; opaque and unparseable urls fall through to the active default.
