@@ -3,7 +3,7 @@ import { applyContentSettings } from './content-settings.js';
 import { applyRulesets } from './rulesets.js';
 import { stampAllTabs, stampTab } from './action.js';
 
-async function applyAll() {
+export async function applyAll() {
   const settings = await getSettings();
   const [cs] = await Promise.all([
     applyContentSettings(settings),
@@ -20,10 +20,24 @@ async function applyAll() {
   await chrome.storage.local.set({ lastApplyErrors: cs.failed });
 }
 
-chrome.runtime.onInstalled.addListener(applyAll);
-chrome.runtime.onStartup.addListener(applyAll);
+// chrome.storage.onChanged fires once per setSetting write, so flipping two
+// toggles quickly starts two applyAll runs. Each is a long awaited sequence —
+// clear, global set, then a set per paused pattern, across eight
+// content-setting types — and concurrent runs interleave, with the last
+// writer winning per type. A stale run can therefore land its value after the
+// fresh one, leaving a type enforcing the previous state, or leaving a
+// paused-domain exception for a site that was just resumed, until the next
+// settings change. Serialising costs nothing at this frequency.
+let queue = Promise.resolve();
+export function schedule() {
+  queue = queue.then(applyAll).catch((e) => console.error('applyAll failed', e));
+  return queue;
+}
+
+chrome.runtime.onInstalled.addListener(schedule);
+chrome.runtime.onStartup.addListener(schedule);
 chrome.storage.onChanged.addListener((_changes, area) => {
-  if (area === 'sync') applyAll();
+  if (area === 'sync') schedule();
 });
 
 // Per-tab icon state. tab.url is readable without the "tabs" permission
