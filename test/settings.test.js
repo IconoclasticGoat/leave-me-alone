@@ -93,7 +93,6 @@ describe('settings', () => {
       ['a*b.com', 'any wildcard at all breaks the match pattern'],
       ['[::1]', 'a bracketed IPv6 literal is not a match-pattern host'],
       ['example.com.', 'a trailing dot yields an empty final label'],
-      ['localhost', 'a single label has no dot and no registrable domain'],
       ['', 'nothing at all'],
       ['-bad.com', 'a label may not start with a hyphen'],
       ['exa mple.com', 'whitespace is not a host'],
@@ -123,5 +122,18 @@ describe('settings', () => {
       expect(isPausableHost('shop.example.co.uk')).toBe(true);
       for (const [host] of REJECTED) expect(isPausableHost(host)).toBe(false);
     });
+
+    // Single-label hosts have no dot and no registrable domain, but neither
+    // downstream layer needs one: patternsFor yields valid content-setting
+    // patterns and excludedRequestDomains accepts them. This is a
+    // developer-facing tool, and localhost is the single most likely host
+    // someone wants to pause while working.
+    for (const host of ['localhost', 'router']) {
+      it(`allows and stores the single-label host ${JSON.stringify(host)}`, async () => {
+        expect(isPausableHost(host)).toBe(true);
+        expect(await pauseSite(host)).toBe(true);
+        expect((await getSettings()).pausedSites).toEqual([host]);
+      });
+    }
   });
 });

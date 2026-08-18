@@ -53,8 +53,13 @@ export function isPaused(settings, hostname) {
 // every layer, while Chrome would reject "*.com" as an excluded domain and
 // fail the whole updateDynamicRules call atomically, freezing the previous
 // dynamic rules in place indefinitely. Bracketed IPv6 literals ("[::1]") are
-// rejected for the same reason.
-const HOSTNAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+// rejected for the same reason: the brackets and colons are not valid DNS
+// label characters. Single-label hosts ("localhost", "router") are
+// deliberately allowed — the dotted-suffix group is optional — since both
+// patternsFor and excludedRequestDomains accept them without issue, and this
+// is a developer-facing tool where "localhost" is the single most likely
+// host someone wants to pause.
+const HOSTNAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/;
 
 /**
  * True when `hostname` can safely be stored in `pausedSites`. The popup uses
