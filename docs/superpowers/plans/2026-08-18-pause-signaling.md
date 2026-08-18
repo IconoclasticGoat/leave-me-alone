@@ -374,10 +374,13 @@ describe('buildDynamicRules', () => {
 describe('applyRulesets', () => {
   it('clears every id and adds the current set in one call', async () => {
     await applyRulesets({ gpc: true, googleOneTap: false, chatWidgets: false });
-    expect(update).toHaveBeenCalledWith({
-      removeRuleIds: [1, 2, 3],
-      addRules: buildDynamicRules({ gpc: true }),
-    });
+    const [arg] = update.mock.calls[0];
+    // Always remove all three ids, even the ones we are not re-adding —
+    // that is what turns a toggle off.
+    expect(arg.removeRuleIds).toEqual([1, 2, 3]);
+    expect(arg.addRules).toHaveLength(1);
+    expect(arg.addRules[0].id).toBe(1);
+    expect(arg.addRules[0].action.type).toBe('modifyHeaders');
   });
 });
 ```
