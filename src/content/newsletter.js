@@ -6,9 +6,19 @@ import { isShown } from '../engine/tools.js';
 // "newsletter", "subscribe", "% off", "discount", or "mailing list"; an
 // overlay whose ONLY marketing signal is "sign up" is indistinguishable from
 // a registration form, and we leave those alone.
+// "like to receive" is ConvertKit/Kit's default consent line. Whole families of
+// recipe blogs run its popups and never say "newsletter" or "subscribe" — the
+// copy is "Send me the recipes" — so the structural checks passed and the word
+// list was the only reason they survived. Matched without the leading "I'd":
+// sites disagree on straight vs curly apostrophe.
+//
+// The lead-magnet phrases are the other half of that pattern: a free download
+// in exchange for an address. "Send me the ..." was considered and rejected —
+// passwordless auth says the same thing ("send me the login link").
 const SUBSCRIBE_WORDS = [
   'newsletter', 'subscribe', 'join our', 'mailing list',
   '% off', 'discount', 'first order', 'stay in the loop', 'get updates',
+  'like to receive', 'free ebook', 'free guide', 'free printable',
 ];
 
 const CLOSE_SELECTORS = [

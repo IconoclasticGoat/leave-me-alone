@@ -32,6 +32,47 @@ describe('looksLikeNewsletter — positives', () => {
       <input type="email" placeholder="Email address"><button>Sign up</button>`));
     expect(looksLikeNewsletter(el)).toBe(true);
   });
+
+  // Observed live on three ConvertKit/Kit recipe blogs. Every structural gate
+  // already passed; only the word list failed, so these popups survived. Note
+  // the field is type=text named email_address, not type=email.
+  it('flags a ConvertKit recipe-blog popup that never says "newsletter"', () => {
+    const el = mount(overlay(`<h2>Send me the recipes</h2>
+      <input type="text" name="email_address" placeholder="Your Email">
+      <input type="text" name="fields[first_name]" placeholder="Your Name">
+      <button>SEND ME THE RECIPES</button>
+      <p>I’d like to receive more tips &amp; recipes from The Test Kitchen.</p>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
+
+  // The two live sites disagree on the apostrophe, so the match must not
+  // depend on it.
+  it('flags the same consent line with a straight apostrophe', () => {
+    const el = mount(overlay(`<h2>Get the recipes</h2>
+      <input type="text" name="email_address" placeholder="Your Email">
+      <button>GET THE RECIPES</button>
+      <p>I'd like to receive more from Spend Some Pennies.</p>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
+
+  it('flags a free-ebook lead magnet', () => {
+    const el = mount(overlay(`<h2>Download now</h2>
+      <p>Grab my free ebook of weeknight dinners.</p>
+      <input type="email" placeholder="Your Email"><button>Download</button>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
+
+  it('flags a free-guide lead magnet', () => {
+    const el = mount(overlay(`<h2>My free guide to sourdough</h2>
+      <input type="email" placeholder="Your Email"><button>Send it</button>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
+
+  it('flags a free-printable lead magnet', () => {
+    const el = mount(overlay(`<h2>Get my free printable meal planner</h2>
+      <input type="email" placeholder="Your Email"><button>Yes please</button>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
 });
 
 describe('looksLikeNewsletter — negatives', () => {
@@ -116,6 +157,17 @@ describe('looksLikeNewsletter — negatives', () => {
   it('refuses an existing-account link even under newsletter copy', () => {
     const el = mount(overlay(`<h2>Join our newsletter</h2>
       <input type="email"><button>Go</button><a>Already have an account?</a>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  // "Send me the ..." was proposed as a subscribe phrase and deliberately not
+  // added: passwordless auth uses the same words. This overlay has an email
+  // field, no password, and no other AUTH_MARKER, so the word list is the only
+  // thing standing between it and a broken login.
+  it('leaves a "send me the login link" auth overlay alone', () => {
+    const el = mount(overlay(`<h2>Welcome back</h2>
+      <p>Send me the link to continue.</p>
+      <input type="email"><button>Continue</button>`));
     expect(looksLikeNewsletter(el)).toBe(false);
   });
 
