@@ -1,8 +1,29 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { TOGGLE_GROUPS, renderToggles, markUnenforced, applyPausedState, init } from '../popup/popup.js';
+import { DEFAULTS } from '../src/settings.js';
 
 describe('popup', () => {
+  it('lists the more group with every default-on toggle before every default-off one', () => {
+    // The grouping is the whole point of the section: someone opening "more"
+    // reads down a list that starts with what is already working and ends
+    // with what they can opt into. Flipping a default without moving the row
+    // interleaves the two halves and quietly destroys that reading order,
+    // and nothing else in the suite would notice.
+    const defaults = TOGGLE_GROUPS.more.map((t) => DEFAULTS[t.key]);
+    const firstOff = defaults.indexOf(false);
+    expect(firstOff).toBeGreaterThan(0);
+    expect(defaults.slice(firstOff)).not.toContain(true);
+  });
+
+  it('leaves autoplay sound off by default', () => {
+    // Deliberate, and load-bearing for the store listing, which advertises it
+    // under "off by default". Chrome's `sound` block is the same control as
+    // "Don't allow sites to play sound", whose scope is wider than this
+    // toggle's label claims. See the note in src/settings.js.
+    expect(DEFAULTS.autoplaySound).toBe(false);
+  });
+
   it('puts exactly the four complaint toggles in the primary group', () => {
     expect(TOGGLE_GROUPS.primary.map((t) => t.key))
       .toEqual(['cookieBanners', 'notifications', 'location', 'newsletters']);

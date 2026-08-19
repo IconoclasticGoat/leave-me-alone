@@ -51,6 +51,32 @@ These tests verify that toggling the extension's controls correctly updates the 
 
 - [ ] **Expected result:** Turning a toggle **on** puts each corresponding type into its blocking state, shown under the "controlled by an extension" banner. Turning it **off** removes the extension's entry entirely: the banner disappears and the type returns to the user's own setting. No toggle ever flips the browser to "Allow". The browser UI reflects every change immediately or on reload.
 
+### Item 3b: What blocking sound actually blocks — BLOCKS THE DEFAULT
+
+The toggle is labelled "Block autoplaying sound", but it writes Chrome's
+`sound` content setting, the same control as "Don't allow sites to play sound"
+in Chrome's own site settings. That wording is broader than the label. Nothing
+in the unit suite can tell the two apart, and the answer decides whether the
+setting is safe to ship on by default. It is currently off by default pending
+this result.
+
+- [ ] **Test:** On Chrome 141 or later, turn "Block autoplaying sound" on. Open
+  a video site (YouTube is the case that matters). Let a video load without
+  touching it, then press play yourself and unmute if needed.
+- [ ] **Expected result, if the label is accurate:** the video does not start
+  playing sound on its own, but pressing play produces sound normally.
+- [ ] **Expected result, if the setting is a full mute:** the tab shows Chrome's
+  muted indicator and pressing play produces no sound at all.
+- [ ] **If it is a full mute:** the toggle must keep its off-by-default state,
+  and its label needs to change to say so, to "Mute sites" or similar. Update the
+  bullet in `docs/STORE-LISTING.md` to match, and drop the note in
+  `src/settings.js` that points here.
+- [ ] **If only automatic playback is suppressed:** the label is accurate and
+  the toggle can move back to on-by-default. Moving it means moving its row in
+  `TOGGLE_GROUPS.more` too, which `test/popup.test.js` enforces.
+
+---
+
 ---
 
 ## Section 2: Cookie Settings and Session-Only Cookies

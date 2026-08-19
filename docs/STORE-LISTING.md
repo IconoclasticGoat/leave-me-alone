@@ -7,7 +7,7 @@ and the code ever disagree, the code is right and this file is a bug.
 
 Each field is fenced and preceded by a marker giving the store's field name and
 its character budget. `test/store-listing.test.js` parses those markers and
-fails if a field outgrows its budget — the store rejects on submit, which costs
+fails if a field outgrows its budget. The store rejects on submit, which costs
 a round trip.
 
 Budgets marked *(self-imposed)* are our own cap, not Google's; the store's real
@@ -25,7 +25,7 @@ Leave Me Alone
 
 <!-- field: short_description max: 132 -->
 ```
-Necessary cookies only, no notification prompts, no location requests, no newsletter popups — on every site, automatically.
+Necessary cookies only. No notification prompts, no location requests, no newsletter popups. On every site, automatically.
 ```
 
 **Category:** Privacy & Security
@@ -39,23 +39,23 @@ Necessary cookies only, no notification prompts, no location requests, no newsle
 ```
 Every website asks you the same questions. Accept cookies? Show notifications? Know your location? Join the newsletter? You answer them the same way every time, on every site, forever.
 
-Leave Me Alone answers them for you.
+Leave Me Alone answers them for you: "Leave me alone."
 
-Turn on the switches you want. From then on, every site you visit is told to leave you alone — before it asks, not after.
+Turn on the switches you want. From then on, every site you visit gets that answer before it asks, instead of asking you first.
 
 WHAT IT DOES
 
 On by default:
-• Reject cookie banners — declines non-essential cookies on 200+ consent platforms, and hides the banner when it meets one it doesn't know
+• Reject cookie banners: declines non-essential cookies on 200+ consent platforms, and hides the banner when it meets one it doesn't know
 • Block notification prompts
 • Block location requests
 • Dismiss newsletter popups
-• Send Global Privacy Control — the legally recognised "do not sell my data" signal, sent as both an HTTP header and a page property
+• Send Global Privacy Control, the "do not sell my data" signal
 • Block popups & automatic downloads
 • Block camera & microphone prompts
-• Block autoplaying sound
 
 Off by default, switch on if you want them:
+• Block autoplaying sound
 • Hide chat bubbles
 • Block Google one-tap sign-in
 • Delete all cookies on quit
@@ -66,15 +66,15 @@ Pause the extension on that site from the toolbar. Everything goes back to norma
 
 PRIVACY
 
-This extension collects nothing, stores nothing about you, and makes no network requests of its own. Not analytics, not telemetry, not a "anonymous usage statistics" checkbox buried in the options.
+This extension collects nothing, stores nothing about you, and makes no network requests of its own. Not analytics, not telemetry, not an "anonymous usage statistics" checkbox buried in the options.
 
 Your switch settings are the only thing saved, and they are saved in your own Chrome profile.
 
-The consent-platform rules are bundled inside the extension and updated only when the extension itself updates. Nothing is fetched at runtime, so there is no server that could see where you browse — because there is no server.
+The consent-platform rules are bundled inside the extension and updated only when the extension itself updates. Nothing is fetched at runtime. There is no server that could see where you browse, because there is no server.
 
 HONEST ABOUT THE LIMITS
 
-Cookie banners are an arms race. This handles the major consent platforms and falls back to hiding banners it doesn't recognise, but a site can always do something new. Blocking prompts is different — that runs through Chrome's own permission settings, so it is not a heuristic and does not miss.
+Cookie banners are an arms race. This handles the major consent platforms and falls back to hiding banners it doesn't recognise, but a site can always do something new. Blocking prompts is different. That runs through Chrome's own permission settings, so it is not a heuristic and does not miss.
 
 OPEN SOURCE
 
@@ -100,7 +100,7 @@ Leave Me Alone applies one set of the user's privacy preferences automatically t
 ```
 Saves the user's switch settings and their list of paused sites, using chrome.storage.sync so that preferences persist between sessions and follow the user across their signed-in Chrome profiles.
 
-This is the only thing the extension writes. It is read back only by the extension's own popup and background service worker to decide what to enforce. Nothing is transmitted anywhere — the extension makes no network requests at all.
+This is the only thing the extension writes. It is read back only by the extension's own popup and background service worker to decide what to enforce. Nothing is transmitted anywhere. The extension makes no network requests at all.
 ```
 
 <!-- field: justification_contentSettings max: 1000 (self-imposed) -->
@@ -129,7 +129,7 @@ The WithHostAccess form is used deliberately rather than plain declarativeNetReq
 ```
 Two features require host access, and neither has a narrower form.
 
-1. Global Privacy Control. Setting the Sec-GPC request header requires host access to the request URL. The signal is meaningless if scoped to a list of sites — its entire purpose is to tell every site the user opts out, and a user cannot enumerate in advance the sites they have not visited yet.
+1. Global Privacy Control. Setting the Sec-GPC request header requires host access to the request URL. The signal is meaningless if scoped to a list of sites. Its entire purpose is to tell every site the user opts out, and a user cannot enumerate in advance the sites they have not visited yet.
 
 2. The toolbar state. Reading tab.url tells the extension whether the current site is paused, which is what the icon and popup display. The "tabs" permission is the alternative and was rejected because its warning is broader than this one.
 
@@ -162,9 +162,9 @@ All three are true trivially: nothing is collected, so nothing can be sold,
 repurposed, or used for lending decisions.
 
 **Privacy policy URL:** not required while the data disclosures above are all
-"no". Worth publishing a short one anyway — the listing requests all-sites
-access, and a reviewer or a cautious user reaching for a policy and finding
-none is a bad first impression.
+"no". Worth publishing a short one anyway, since the listing requests all-sites
+access and a reviewer or a cautious user reaching for a policy and finding none
+is a bad first impression.
 
 ---
 
@@ -173,4 +173,4 @@ none is a bad first impression.
 - **Screenshot**, 1280×800 or 640×400, at least one. The popup with its
   switches, over a real site showing a banner it has dealt with, is the
   obvious shot.
-- **Store icon**, 128×128 — `icons/active-128.png` already qualifies.
+- **Store icon**, 128×128. `icons/active-128.png` already qualifies.
