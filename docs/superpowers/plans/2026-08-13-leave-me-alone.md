@@ -998,8 +998,8 @@ export const TOGGLE_GROUPS = {
   ],
   more: [
     { key: "gpc", label: "Send Global Privacy Control" },
-    { key: "cameraMic", label: "Block camera & microphone prompts" },
     { key: "popupsDownloads", label: "Block popups & automatic downloads" },
+    { key: "cameraMic", label: "Block camera & microphone prompts" },
     { key: "autoplaySound", label: "Block autoplaying sound" },
     { key: "chatWidgets", label: "Hide chat bubbles" },
     { key: "googleOneTap", label: "Block Google one-tap sign-in" },
