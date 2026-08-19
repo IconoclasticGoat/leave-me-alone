@@ -41,6 +41,24 @@ See [docs/QA.md](docs/QA.md) for the checklist. This covers the `chrome.contentS
 
 Known gaps and deferred findings are recorded in [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 
+## Publishing
+
+```bash
+npm run package
+```
+
+builds `dist/` and writes the uploadable zip, manifest at its root.
+
+Listing copy and the permission justifications live in
+[docs/STORE-LISTING.md](docs/STORE-LISTING.md). `test/store-listing.test.js`
+holds every field inside the store's character budget and fails if the manifest
+gains a permission the listing does not justify — a rejection on either count
+costs a review round trip measured in days.
+
+Why the extension asks for `<all_urls>`, and why narrowing it would cost the
+GPC signal while leaving the install prompt unchanged, is recorded in
+[docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
+
 ## Privacy
 
 The extension makes no network requests of its own and collects no data. Consent rules are bundled at build time rather than fetched at runtime.
