@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Leave Me Alone",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Necessary cookies only, no notification prompts, no location requests, no newsletter popups.",
   "permissions": ["storage", "contentSettings", "declarativeNetRequest"],
   "host_permissions": ["<all_urls>"],

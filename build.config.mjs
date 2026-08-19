@@ -26,3 +26,16 @@ export const MODULE_BUILD = {
     'popup/popup': 'popup/popup.js',
   },
 };
+
+// Copied verbatim into dist/. THIRD_PARTY.md and LICENSE are not optional:
+// the vendored Consent-O-Matic rules are MIT, which requires the notice to
+// travel with every distributed copy — and the Web Store zip is built from
+// dist/, so a file missing here is a file missing from what users receive.
+export const COPY = [
+  'manifest.json',
+  'icons',
+  'popup/popup.html',
+  'popup/popup.css',
+  'THIRD_PARTY.md',
+  'LICENSE',
+];

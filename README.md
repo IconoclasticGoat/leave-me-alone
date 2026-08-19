@@ -51,4 +51,4 @@ Cookie-banner rules are vendored from [Consent-O-Matic](https://github.com/cavi-
 
 ## License
 
-TBD
+[MIT](LICENSE). The vendored Consent-O-Matic rules are MIT too — see [THIRD_PARTY.md](THIRD_PARTY.md).
