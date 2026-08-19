@@ -44,6 +44,20 @@ h1 {
   opacity: .55;
 }
 
+/* Deliberately not dimmed like .unenforced: this toggle *is* being enforced.
+   What failed is the paused site's exemption from it, so the row is flagged
+   for attention rather than greyed out as inactive. */
+.pause-unapplied {
+  border-left: 2px solid #a33;
+  padding-left: .4rem;
+  margin-left: -.4rem;
+}
+
+/* Two failure kinds can be reported at once, so #errors holds a line each. */
+.errors > div + div {
+  margin-top: .25rem;
+}
+
 #pause {
   width: 100%;
   margin-top: 0.75rem;
