@@ -76,7 +76,13 @@ batching if that list grew into the hundreds.
 - The CMP method sequence is unpinned: reducing `ORDER` to `['DO_CONSENT']` passes. On a real site that means categories are unticked but never submitted — the extension appears to do nothing while tests stay green.
 - Only 1 of 202 vendored rules (Cookiebot) has an integration fixture.
 - The evaluation-time guard in `createMatcher` — a Critical fix during implementation — has no test; deleting it leaves the suite green.
-- Popup `init()` is untested: tab query, pause button wiring, error surfacing.
+- `declarativeNetRequest`'s `excludedRequestDomains` has never been given a
+  bare-IP paused host in a real browser. `patternsFor` now skips the patterns
+  Chrome rejects for an address literal, so the content-settings layer is
+  clean, but the DNR layer is only ever exercised against a stub. If Chrome
+  rejects an IP there, `updateDynamicRules` fails *atomically* and the
+  previous dynamic rules freeze in place — the same failure mode `HOSTNAME_RE`
+  was written to prevent. See the bare-IP items in [QA.md](QA.md) Section 7.
 - No error handling anywhere around `chrome.storage.sync` rejections; `pausedSites` can hit `QUOTA_BYTES_PER_ITEM`.
 
 ## A note on testing this codebase

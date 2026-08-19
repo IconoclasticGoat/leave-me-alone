@@ -16,7 +16,7 @@ Inspired by [a Bluesky post by Helen Barnard](https://bsky.app/profile/helenbarn
 
 **Complete, unverified on real websites.**
 
-The code is complete and all 205 unit tests pass. The extension has not yet been tested in a real Chrome browser against live websites — this verification requires manual QA.
+The code is complete and all 221 unit tests pass. The extension has not yet been tested in a real Chrome browser against live websites — this verification requires manual QA.
 
 ### To install and test:
 
