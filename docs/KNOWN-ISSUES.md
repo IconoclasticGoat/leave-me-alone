@@ -50,6 +50,52 @@ batching if that list grew into the hundreds.
 
 **`stripWww` is not a public-suffix list.** Pause strips a leading `www.` only — `m.example.com` and `www2.example.com` are treated as distinct domains. True eTLD+1 needs a PSL, which this zero-dependency build does not carry. This now governs the `declarativeNetRequest` domain exclusions and the content-setting patterns as well, not just DOM-layer pause.
 
+## Permissions
+
+**`<all_urls>` cannot be narrowed, and narrowing it would buy nothing.** Raised
+while preparing the Web Store submission, since broad host access is the single
+biggest driver of review scrutiny. Traced to a conclusion, then left alone.
+
+Only two things actually require the host permission:
+
+- **The `Sec-GPC` header rule.** `rules/gpc.json` uses `modifyHeaders`, and
+  Chrome requires host permissions for header-modifying and redirecting rules —
+  for the request URL, and additionally for the initiator on everything that is
+  not a navigation request. The rule's filter is `*`, so that is `<all_urls>`
+  by construction. Without it, GPC degrades to the `navigator.globalPrivacyControl`
+  property alone, losing the half of the signal that carries legal weight.
+- **Reading `tab.url`** in `src/background/index.js` for per-tab icon stamping.
+  The alternative is the `tabs` permission, which warns *"Read your browsing
+  history"* — not obviously a better trade than the host permission it replaces.
+
+Everything else is already covered without it. `chrome.contentSettings` needs
+only the `contentSettings` permission — the `<all_urls>` primary pattern it
+writes is an API argument, not a permission requirement — and that accounts for
+six of the eleven settings. The one-tap and chat-widget rules are DNR **block**
+actions, which need no host access. Content scripts carry their own `matches`.
+
+The decisive point is that removing `host_permissions` would not change the
+install prompt at all: Chrome treats `content_scripts.matches` identically to
+host permissions when computing warnings, and the content scripts already match
+`<all_urls>`. The prompt reads *"Read and change all your data on all
+websites"* either way. Narrowing the line would cost the GPC header and save
+the user zero words of warning.
+
+The only architecture that genuinely cleans up the prompt is dropping the
+static `content_scripts` block, declaring `optional_host_permissions`, and
+calling `chrome.permissions.request()` from the popup on first run followed by
+`chrome.scripting.registerContentScripts()`. Rejected: it gates an extension
+whose entire premise is "works everywhere, automatically" behind a runtime
+grant carrying the same warning text, and it adds a whole permission-state
+machine — is access granted, was it revoked, are the scripts registered — to
+every path that currently just reads a setting.
+
+What *was* taken from this analysis: `declarativeNetRequest` became
+`declarativeNetRequestWithHostAccess`. The plain permission adds a separate
+*"Block content on any page"* line to the install prompt; the WithHostAccess
+form adds none and relies on host permissions this extension already holds. All
+three rules keep working. One fewer warning, no functional change.
+
 ## Performance
 
 **`dist/content.js` is ~492 KB and injects into every frame.** The 455 KB rule bundle is inlined at build time, and the manifest uses `all_frames: true`. An ad-heavy page with 30 subframes parses roughly 15 MB of script. Options: run the engine only in the top frame; load the bundle via `chrome.runtime.getURL` (an extension-internal URL, so the zero-network-requests promise survives); or hold it in the service worker.

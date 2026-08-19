@@ -3,7 +3,7 @@
   "name": "Leave Me Alone",
   "version": "1.0.0",
   "description": "Necessary cookies only, no notification prompts, no location requests, no newsletter popups.",
-  "permissions": ["storage", "contentSettings", "declarativeNetRequest"],
+  "permissions": ["storage", "contentSettings", "declarativeNetRequestWithHostAccess"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
   "icons": {
