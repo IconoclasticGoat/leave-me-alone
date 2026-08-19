@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
-import { TOGGLE_GROUPS, renderToggles, markUnenforced, applyPausedState } from '../popup/popup.js';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { TOGGLE_GROUPS, renderToggles, markUnenforced, applyPausedState, init } from '../popup/popup.js';
 
 describe('popup', () => {
   it('puts exactly the four complaint toggles in the primary group', () => {
@@ -54,6 +54,80 @@ describe('markUnenforced', () => {
     markUnenforced(doc, []);
     expect(doc.querySelector('#errors').textContent).toBe('');
     expect(doc.querySelectorAll('.unenforced')).toHaveLength(0);
+  });
+
+  // applyContentSettings reports two unrelated kinds of failure through the
+  // same list. A whole-type failure really is the Chrome version (sound
+  // needs 141+). A per-domain failure is a match pattern Chrome refused for
+  // one paused site — the version is irrelevant, the toggle is working, and
+  // it is the *pause* that did not take. Same wording for both told the
+  // user the wrong thing about half of them.
+  const patternFailure = (type, settingKey, pattern) =>
+    ({ type, settingKey, error: `Invalid value for pattern (pattern ${pattern})` });
+
+  it('blames the paused domain, not the Chrome version, for a rejected pattern', () => {
+    const doc = mount();
+    markUnenforced(doc, [patternFailure('location', 'location', 'http://*.192.168.1.1/*')]);
+    const text = doc.querySelector('#errors').textContent;
+    expect(text).toContain('192.168.1.1');
+    expect(text).not.toContain('Chrome version');
+  });
+
+  it('names the toggle a failed pause left in force on that domain', () => {
+    const doc = mount();
+    markUnenforced(doc, [patternFailure('location', 'location', 'https://*.dev.local/*')]);
+    expect(doc.querySelector('#errors').textContent).toContain('Block location requests');
+  });
+
+  it('reports a version failure and a pattern failure as separate statements', () => {
+    const doc = mount();
+    markUnenforced(doc, [
+      { type: 'sound', settingKey: 'autoplaySound', error: 'unsupported' },
+      patternFailure('location', 'location', 'http://*.192.168.1.1/*'),
+    ]);
+    const lines = [...doc.querySelectorAll('#errors > *')].map((el) => el.textContent);
+    expect(lines).toHaveLength(2);
+
+    const version = lines.find((l) => l.includes('Chrome version'));
+    const pattern = lines.find((l) => l.includes('192.168.1.1'));
+    expect(version).toContain('Block autoplaying sound');
+    // The version sentence must not absorb the pattern failure's toggle —
+    // that is the exact lie this whole split exists to stop telling.
+    expect(version).not.toContain('Block location requests');
+    expect(pattern).toContain('Block location requests');
+  });
+
+  it('does not dim a row whose toggle is enforced, only over-enforced', () => {
+    // '.unenforced' dims the row to mean "this switch is doing nothing".
+    // For a pattern failure the switch is doing exactly what it says — it is
+    // the paused exception that is missing — so dimming it would be a second
+    // lie on top of the copy.
+    const doc = mount();
+    markUnenforced(doc, [patternFailure('location', 'location', 'http://*.192.168.1.1/*')]);
+    const row = doc.querySelector('#toggle-location').closest('.row');
+    expect(row.classList.contains('unenforced')).toBe(false);
+    expect(row.classList.contains('pause-unapplied')).toBe(true);
+  });
+
+  it('names a domain once when several types failed on it', () => {
+    const doc = mount();
+    markUnenforced(doc, [
+      patternFailure('location', 'location', 'http://*.192.168.1.1/*'),
+      patternFailure('notifications', 'notifications', 'https://*.192.168.1.1/*'),
+    ]);
+    const text = doc.querySelector('#errors').textContent;
+    expect(text.match(/192\.168\.1\.1/g)).toHaveLength(1);
+    expect(text).toContain('Block location requests');
+    expect(text).toContain('Block notification prompts');
+  });
+
+  it('replaces a previous report instead of appending to it', () => {
+    const doc = mount();
+    markUnenforced(doc, [patternFailure('location', 'location', 'http://*.192.168.1.1/*')]);
+    markUnenforced(doc, [{ type: 'sound', settingKey: 'autoplaySound', error: 'unsupported' }]);
+    const text = doc.querySelector('#errors').textContent;
+    expect(text).not.toContain('192.168.1.1');
+    expect(text).toContain('Block autoplaying sound');
   });
 });
 
@@ -126,5 +200,117 @@ describe('applyPausedState', () => {
     applyPausedState(doc, 'example.com', false);
     expect(doc.querySelector('#status').textContent).toBe('');
     expect(doc.querySelector('#status').querySelector('#pause')).toBe(null);
+  });
+});
+
+describe('init', () => {
+  beforeEach(() => {
+    // init()'s click handler closes the popup. jsdom's real window.close()
+    // tears down the document, taking every test after it with it.
+    vi.spyOn(window, 'close').mockImplementation(() => {});
+  });
+
+  const mount = () => {
+    document.body.innerHTML =
+      '<h1></h1><div id="status"></div><div id="toggles"></div>' +
+      '<p id="errors" class="errors"></p><button id="pause"></button>';
+    return document;
+  };
+
+  // Only the pieces init() actually touches. sync holds settings and the
+  // paused list; local holds the last apply's failures.
+  const stubChrome = ({ url, pausedSites = [], lastApplyErrors = [] }) => {
+    const sync = { pausedSites };
+    globalThis.chrome = {
+      tabs: { query: async () => (url === null ? [] : [{ url }]) },
+      storage: {
+        sync: {
+          get: async (defaults) => ({ ...defaults, ...sync }),
+          set: async (obj) => { Object.assign(sync, obj); },
+        },
+        local: { get: async (defaults) => ({ ...defaults, lastApplyErrors }) },
+      },
+    };
+    return sync;
+  };
+
+  // A bracketed IPv6 literal is the reachable version of this: HOSTNAME_RE
+  // rejects it, so today's pauseSite would refuse to store it — but a value
+  // stored by an older build is already synced into chrome.storage.sync, and
+  // isPaused matches it exactly. The user is on http://[::1]:3000/ with the
+  // extension paused and no way to say so.
+  const LEGACY = '[::1]';
+
+  it('offers Resume for a paused host that can no longer be stored', async () => {
+    const doc = mount();
+    stubChrome({ url: `http://${LEGACY}:3000/app`, pausedSites: [LEGACY] });
+
+    await init();
+
+    const btn = doc.querySelector('#pause');
+    expect(btn.hidden).toBe(false);
+    expect(btn.textContent).toBe(`Resume on ${LEGACY}`);
+    expect(doc.querySelector('#status').textContent).toContain(`Paused on ${LEGACY}`);
+  });
+
+  it('actually resumes that host when the button is clicked', async () => {
+    // The button existing is worth nothing if unpauseSite cannot remove the
+    // very value that stranded the user.
+    const doc = mount();
+    const sync = stubChrome({ url: `http://${LEGACY}:3000/app`, pausedSites: [LEGACY] });
+
+    await init();
+    doc.querySelector('#pause').click();
+    // The handler awaits a storage read and a write; drain both.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sync.pausedSites).toEqual([]);
+  });
+
+  it('still hides the button for an unstorable host that is not paused', async () => {
+    // Nothing to resume, and pauseSite would refuse to store it: a button
+    // here would silently do nothing.
+    const doc = mount();
+    stubChrome({ url: 'http://*.com/' });
+
+    await init();
+
+    expect(doc.querySelector('#pause').hidden).toBe(true);
+  });
+
+  it('surfaces apply errors even when the pause button is hidden', async () => {
+    // The early return skipped markUnenforced entirely, so a user on a host
+    // with no pause button also lost the only report of what failed.
+    const doc = mount();
+    stubChrome({
+      url: 'http://*.com/',
+      lastApplyErrors: [{ type: 'sound', settingKey: 'autoplaySound', error: 'unsupported' }],
+    });
+
+    await init();
+
+    expect(doc.querySelector('#errors').textContent).toContain('Block autoplaying sound');
+  });
+
+  it('offers Pause on an ordinary host', async () => {
+    const doc = mount();
+    stubChrome({ url: 'https://www.example.com/article' });
+
+    await init();
+
+    const btn = doc.querySelector('#pause');
+    expect(btn.hidden).toBe(false);
+    expect(btn.textContent).toBe('Pause on www.example.com');
+    expect(doc.querySelector('#toggle-notifications').disabled).toBe(false);
+  });
+
+  it('hides the button and disables nothing on a tab with no url', async () => {
+    const doc = mount();
+    stubChrome({ url: null });
+
+    await init();
+
+    expect(doc.querySelector('#pause').hidden).toBe(true);
+    expect(doc.querySelector('#toggle-notifications').disabled).toBe(false);
   });
 });

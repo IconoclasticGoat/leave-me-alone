@@ -138,6 +138,20 @@ These tests verify that the extension correctly dismisses consent banners and di
       entry is gone.
 - [ ] **Test:** Pause `example.com`, then visit `sub.example.com`.
       **Expect:** paused there too.
+- [ ] **Test:** Pause a bare-IP dev server (`http://192.168.1.1/`, or whatever
+      LAN address is to hand), then open the popup.
+      **Expect:** no error line at the bottom of the popup, and no toggle row
+      is flagged. `patternsFor` skips the `*.`-prefixed patterns for an
+      address literal because Chrome rejects them; if the error line is back,
+      that skip has regressed.
+- [ ] **Test:** With that bare-IP site still paused, toggle any setting to
+      force a rebuild of the dynamic rules, then check
+      `chrome://extensions` → Errors, and confirm blocking still works on an
+      ordinary site.
+      **Expect:** no `updateDynamicRules` error. This is the one bare-IP path
+      that is *not* covered by the unit tests — `excludedRequestDomains` is
+      only ever exercised against a stub, and Chrome fails that call
+      atomically, which would freeze the previous dynamic rules in place.
 
 ### Item 9b: A toggle that is off leaves no extension-controlled setting
 

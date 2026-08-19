@@ -23,14 +23,23 @@ export function releaseValueFor(type) {
   return NO_ASK.has(type) ? 'allow' : 'ask';
 }
 
+// Chrome's match-pattern parser rejects a wildcard subdomain on an address
+// literal: '*.192.168.1.1' is not a host it will accept. An address has no
+// subdomains to cover anyway, so the two exact-host patterns are the whole
+// set. HOSTNAME_RE keeps IPv4 hosts pausable on purpose — a dev server on a
+// LAN address is exactly what someone wants to pause — and without this the
+// two wildcard patterns were rejected for every one of the eight
+// content-setting types on every apply. Bracketed IPv6 literals never reach
+// here; HOSTNAME_RE rejects them outright.
+const IPV4_RE = /^\d{1,3}(\.\d{1,3}){3}$/;
+
 // A paused site needs a pattern more specific than '<all_urls>' to win.
-// Both schemes, and both the bare domain and its subdomains, matching how
-// isPaused() treats a stored domain.
+// Both schemes, and — for a DNS name — both the bare domain and its
+// subdomains, matching how isPaused() treats a stored domain.
 export function patternsFor(domain) {
-  return [
-    `http://${domain}/*`, `https://${domain}/*`,
-    `http://*.${domain}/*`, `https://*.${domain}/*`,
-  ];
+  const exact = [`http://${domain}/*`, `https://${domain}/*`];
+  if (IPV4_RE.test(domain)) return exact;
+  return [...exact, `http://*.${domain}/*`, `https://*.${domain}/*`];
 }
 
 const messageOf = (e) => e?.message ?? String(e);

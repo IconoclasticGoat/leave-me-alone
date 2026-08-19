@@ -86,7 +86,11 @@ export function applyPausedState(doc, host, paused) {
   status.append(banner, btn);
 }
 
-async function init() {
+/**
+ * Exported for tests: the popup's whole tab-dependent wiring lives here, and
+ * it is the only place the paused host and the failure report meet.
+ */
+export async function init() {
   const settings = await getSettings();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -98,33 +102,88 @@ async function init() {
   container.classList.toggle('paused-toggles', paused);
 
   const btn = document.querySelector('#pause');
-  // No host, or a host pauseSite would refuse to store (a failed navigation
-  // can leave "http://*.com/" on the tab, which URL parses happily). Offering
-  // a button that silently does nothing is worse than offering none.
-  if (!host || !isPausableHost(host)) { btn.hidden = true; return; }
+  // Pausing needs a host pauseSite will actually store — a failed navigation
+  // can leave "http://*.com/" on the tab, which URL parses happily, and a
+  // button that silently does nothing is worse than no button. Resuming only
+  // needs the host to match something already stored, which a value synced
+  // from an older build can be while being unstorable today. Gating both on
+  // isPausableHost stranded that user: disabled toggles, no banner, no way
+  // back.
+  const canAct = Boolean(host) && (paused || isPausableHost(host));
+  btn.hidden = !canAct;
+  if (canAct) {
+    applyPausedState(document, host, paused);
+    btn.addEventListener('click', async () => {
+      await (paused ? unpauseSite(host) : pauseSite(host));
+      window.close();
+    });
+  }
 
-  applyPausedState(document, host, paused);
-  btn.addEventListener('click', async () => {
-    await (paused ? unpauseSite(host) : pauseSite(host));
-    window.close();
-  });
-
+  // Outside that branch on purpose: a host with no pause button still needs
+  // the report of what the last apply could not enforce.
   const { lastApplyErrors = [] } = await chrome.storage.local.get({ lastApplyErrors: [] });
   markUnenforced(document, lastApplyErrors);
 }
 
-/** Marks the toggles Chrome refused to enforce, by their settingKey. */
-export function markUnenforced(doc, failures = []) {
-  const keys = [...new Set(failures.map((f) => f.settingKey))];
-  if (keys.length === 0) return;
+// applyContentSettings reports a per-domain pattern rejection with the
+// offending pattern appended, which is what separates it from a whole-type
+// failure.
+const PATTERN_RE = /\(pattern (.+)\)$/;
 
-  const all = [...TOGGLE_GROUPS.primary, ...TOGGLE_GROUPS.more];
-  for (const key of keys) {
-    doc.querySelector(`#toggle-${key}`)?.closest('.row')?.classList.add('unenforced');
+// 'http://*.192.168.1.1/*' -> '192.168.1.1'
+const domainOf = (pattern) =>
+  pattern.replace(/^\w+:\/\//, '').replace(/^\*\./, '').replace(/\/\*$/, '');
+
+const labelFor = (key) =>
+  [...TOGGLE_GROUPS.primary, ...TOGGLE_GROUPS.more]
+    .find((t) => t.key === key)?.label ?? key;
+
+const uniq = (xs) => [...new Set(xs)];
+
+/**
+ * Reports what didn't apply, and marks the rows responsible.
+ *
+ * Two unrelated failures arrive through the one list and mean opposite
+ * things. A whole-type failure means the toggle is doing nothing at all —
+ * `sound` needs Chrome 141+, and the Chrome version really is the cause. A
+ * per-domain failure means Chrome refused the match pattern for one paused
+ * site: the toggle is working exactly as it says, and it is the *pause* that
+ * did not take, so that one site is still being blocked while the toolbar
+ * icon calls it paused. Reporting both as "this Chrome version can't
+ * enforce" was true of only the first kind.
+ */
+export function markUnenforced(doc, failures = []) {
+  const errors = doc.querySelector('#errors');
+  errors.textContent = '';
+  for (const row of doc.querySelectorAll('.unenforced, .pause-unapplied')) {
+    row.classList.remove('unenforced', 'pause-unapplied');
   }
-  const labels = keys.map((k) => all.find((t) => t.key === k)?.label ?? k);
-  doc.querySelector('#errors').textContent =
-    `This Chrome version can't enforce: ${labels.join(', ')}`;
+
+  const pattern = failures.filter((f) => PATTERN_RE.test(f.error ?? ''));
+  const version = failures.filter((f) => !PATTERN_RE.test(f.error ?? ''));
+
+  // `.unenforced` dims a row to say "this switch is doing nothing", which is
+  // only true of the version kind. A pattern failure gets its own mark so
+  // the row is still findable without claiming the toggle is dead.
+  const report = (klass, entries, sentence) => {
+    const keys = uniq(entries.map((f) => f.settingKey));
+    if (keys.length === 0) return;
+    for (const key of keys) {
+      doc.querySelector(`#toggle-${key}`)?.closest('.row')?.classList.add(klass);
+    }
+    const line = doc.createElement('div');
+    line.textContent = sentence(keys.map(labelFor), entries);
+    errors.append(line);
+  };
+
+  report('unenforced', version, (labels) =>
+    `This Chrome version can't enforce: ${labels.join(', ')}`);
+
+  report('pause-unapplied', pattern, (labels, entries) => {
+    const domains = uniq(entries.map((f) => domainOf(f.error.match(PATTERN_RE)[1])));
+    return `Chrome refused the pause exception for ${domains.join(', ')}, `
+      + `so these still apply there: ${labels.join(', ')}`;
+  });
 }
 
 if (typeof document !== 'undefined' && document.querySelector('#toggles')) init();

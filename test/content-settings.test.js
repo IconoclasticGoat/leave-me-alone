@@ -43,6 +43,27 @@ describe('patternsFor', () => {
       'http://*.example.com/*', 'https://*.example.com/*',
     ]);
   });
+
+  it('omits the wildcard-subdomain patterns for an IPv4 literal', () => {
+    // Chrome's match-pattern parser rejects '*.192.168.1.1' — a wildcard
+    // subdomain is only meaningful on a DNS name, and an IP literal has no
+    // subdomains to cover. HOSTNAME_RE lets IPv4 hosts be paused on purpose,
+    // so emitting them cost two rejected patterns per content-setting type
+    // on every single apply.
+    expect(patternsFor('192.168.1.1')).toEqual([
+      'http://192.168.1.1/*', 'https://192.168.1.1/*',
+    ]);
+  });
+
+  it('still covers subdomains of a DNS name whose first label is numeric', () => {
+    // '3m.com' and '1.1.1.1' both start with a digit; only the second is an
+    // address. A too-eager IP test would quietly drop subdomain coverage
+    // from ordinary sites.
+    expect(patternsFor('3m.com')).toEqual([
+      'http://3m.com/*', 'https://3m.com/*',
+      'http://*.3m.com/*', 'https://*.3m.com/*',
+    ]);
+  });
 });
 
 describe('applyContentSettings', () => {
@@ -124,6 +145,27 @@ describe('applyContentSettings', () => {
     await applyContentSettings({ location: true, pausedSites: ['a.com', 'b.org'] });
     expect(calls).toContainEqual(['location', 'ask', 'https://*.a.com/*']);
     expect(calls).toContainEqual(['location', 'ask', 'https://*.b.org/*']);
+  });
+
+  it('applies a paused bare-IP host with nothing left unenforced', async () => {
+    // Chrome rejects a wildcard subdomain on an IP literal, so stub that
+    // rule and let every type run against it. Before patternsFor skipped
+    // those patterns, this failed two of four patterns for all eight
+    // content-setting types on every apply — a permanent unenforced marker
+    // on every toggle in the popup, for a host the user validly paused.
+    for (const type of Object.keys(chrome.contentSettings)) {
+      const real = chrome.contentSettings[type].set;
+      chrome.contentSettings[type].set = vi.fn(async (arg) => {
+        if (/:\/\/\*\.\d/.test(arg.primaryPattern)) throw new Error('invalid pattern');
+        return real(arg);
+      });
+    }
+
+    const r = await applyContentSettings({ ...DEFAULTS, pausedSites: ['192.168.1.1'] });
+
+    expect(r.failed).toEqual([]);
+    expect(calls).toContainEqual(['location', 'ask', 'https://192.168.1.1/*']);
+    expect(r.ok).toContain('location');
   });
 
   it('writes no per-domain rules when nothing is paused', async () => {
