@@ -17,7 +17,11 @@ describe('click', () => {
 
   it('is a no-op when nothing matches', async () => {
     document.body.innerHTML = ``;
-    await expect(run({ type: 'click', target: { selector: '.gone' } })).resolves.toBeUndefined();
+    // Reports that it found nothing, so a caller can tell "no target" apart
+    // from "clicked" — that distinction is what stops SAVE_CONSENT claiming a
+    // panel it never saved.
+    await expect(run({ type: 'click', target: { selector: '.gone' } }))
+      .resolves.toEqual({ acted: false, consentOk: true });
   });
 });
 

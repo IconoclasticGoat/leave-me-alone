@@ -37,13 +37,48 @@ export class CMP {
     return ORDER.some((name) => Boolean(this.method(name)?.action));
   }
 
-  /** Throws UnsupportedAction if any method needs an action we do not implement. */
+  /**
+   * Runs the ordered methods and reports how far it got.
+   *
+   * Upstream splits some CMPs across two rules: one detects the banner and
+   * opens its options, a second detects the panel that opening produced and
+   * does the real consent work (onetrust -> onetrust_pcpanel is the case that
+   * matters most). A run that only opened options is therefore not a failure,
+   * it is a handoff — so it must neither claim success nor hide the CMP,
+   * because hiding it would bury the panel the second rule detects.
+   *
+   * Throws UnsupportedAction if any method needs an action we do not implement.
+   */
   async run(root) {
-    for (const name of ORDER) {
+    const outcome = { acted: false, saved: false, consentOk: true, hidden: false };
+
+    const runMethod = async (name) => {
       const m = this.method(name);
-      if (!m?.action) continue;
-      await createAction(m.action, this.ctx).execute(root);
-    }
+      if (!m?.action) return null;
+      const r = await createAction(m.action, this.ctx).execute(root);
+      outcome.acted = outcome.acted || r.acted;
+      return r;
+    };
+
+    await runMethod('OPEN_OPTIONS');
+
+    const consent = await runMethod('DO_CONSENT');
+    if (consent) outcome.consentOk = consent.consentOk;
+
+    // Saving a panel whose categories are still switched on would confirm the
+    // site's defaults instead of our rejection — worse than leaving it alone.
+    if (!outcome.consentOk) return outcome;
+
+    const save = await runMethod('SAVE_CONSENT');
+    // A declared SAVE_CONSENT that found no target has not resolved anything;
+    // the panel it saves has usually not rendered yet. Leave the CMP visible
+    // and let the next sweep pick it up.
+    if (save && !save.acted) return outcome;
+    outcome.saved = save ? save.acted : true;
+
+    const hide = await runMethod('HIDE_CMP');
+    outcome.hidden = Boolean(hide?.acted);
+    return outcome;
   }
 }
 

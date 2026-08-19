@@ -4,6 +4,29 @@ Findings raised during implementation review that were deliberately not fixed. N
 
 ## Behavioural gaps
 
+**TCF vendor consent is never withdrawn.** Measured on uk.investing.com after
+a full reject: `__tcfapi` reports `purposeConsents: 0` (good) but
+`vendorConsents: 104`. The vendor list is a separate sub-panel behind "List of
+IAB Vendors", driven by `select-all-vendor-groups-handler` /
+`select-all-vendor-leg-handler`, and no rule in the bundle references those
+selectors — not `onetrust_pcpanel`, not any other. Under TCF a vendor needs
+both purpose and vendor consent to process, so purposes at zero blunts most of
+the impact, but the vendor flags stay set and we should not describe the result
+as a clean rejection. `legitimateInterests` is handled: the rule objects via
+`button.ot-obj-leg-btn-handler`, though that path has only been exercised in
+jsdom, never confirmed against a live TC string.
+
+**The `onetrust` panel rules have not been verified against a live TC string.**
+The two-stage handoff is covered end to end in `test/handoff.test.js` over
+markup captured from the live site, and the real browser confirms the panel
+renders ~222ms after OPEN_OPTIONS, that "Confirm My Choices" is accepted
+(`eventStatus: useractioncomplete`), and that OneTrust closes its own banner on
+save. What is still unconfirmed is the TC string our full DO_CONSENT produces,
+because the in-app browser's CSP blocks injecting the bundled engine into the
+page. Checking it needs the built extension loaded in Chrome, reading
+`__tcfapi('getTCData', 2, ...)` after a sweep.
+
+
 **Pausing a site writes `ask`, which is not the user's own preference.**
 While a toggle is on, the extension holds `<all_urls>` → `block` for that
 content-setting type, and a paused site needs a more specific pattern to

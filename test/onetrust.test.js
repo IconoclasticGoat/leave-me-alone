@@ -42,15 +42,24 @@ describe('queryAll childFilterNegate', () => {
 });
 
 describe('runEngine on the real investing.com OneTrust banner', () => {
-  it('matches the full `onetrust` rule, not the UTILITY-only `onetrust_banner`', async () => {
+  it('reaches the full `onetrust` rule, not the UTILITY-only `onetrust_banner`', async () => {
     const r = await runEngine(BUNDLE, document);
-    expect(r.handled).toBe('onetrust');
+    expect(r.cmp).toBe('onetrust');
   });
 
-  it('leaves no visible banner behind', async () => {
+  it('hands off rather than claiming a banner it has not resolved', async () => {
+    // This fixture is the banner alone. Opening its options is all stage 1
+    // can do; the consent work belongs to onetrust_pcpanel once the panel
+    // renders, which test/handoff.test.js drives end to end.
+    const r = await runEngine(BUNDLE, document);
+    expect(r).toMatchObject({ handled: null, reason: 'staged' });
+  });
+
+  it('leaves the CMP visible for the panel stage to find', async () => {
     await runEngine(BUNDLE, document);
     const sdk = document.querySelector('#onetrust-consent-sdk');
-    expect(sdk.style.display).toBe('none');
+    // Hiding here would bury the panel onetrust_pcpanel detects.
+    expect(sdk.style.display).toBe('');
   });
 });
 

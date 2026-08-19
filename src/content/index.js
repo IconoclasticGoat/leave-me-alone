@@ -14,6 +14,10 @@ export function createSweeper({ settings, bundle, root = document, engine = runE
     tripped: false,
     errors: 0,
     handled: false,
+    // Rules that opened a CMP but have not resolved it. They stay matchable,
+    // so without this the next sweep would run the same rule again instead of
+    // letting the rule for the panel it opened take over.
+    staged: new Set(),
 
     async sweep() {
       if (state.tripped) return;
@@ -21,10 +25,16 @@ export function createSweeper({ settings, bundle, root = document, engine = runE
 
       if (settings.cookieBanners && !state.handled) {
         try {
-          const r = await engine(bundle, root);
+          const r = await engine(bundle, root, { skip: state.staged });
           state.errors = 0;
           if (r.handled) {
             state.handled = true;
+            didSomething = true;
+          } else if (r.reason === 'staged') {
+            // A rule opened the CMP's options but has not resolved it. Hiding
+            // now — cosmetically or otherwise — would bury the panel the next
+            // rule needs to see, so do neither and wait for the next sweep.
+            state.staged.add(r.cmp);
             didSomething = true;
           } else {
             // Either no rule matched, or one matched but hit an action we
