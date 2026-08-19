@@ -2,8 +2,6 @@
 
 Findings raised during implementation review that were deliberately not fixed. None block the extension from working; all are recorded so they are not rediscovered from scratch.
 
-**The extension has never been run in a real browser.** See [QA.md](QA.md) — that checklist is written but unexecuted, and it is the only verification the `chrome.contentSettings` layer and real-world CMP behaviour will ever get.
-
 ## Behavioural gaps
 
 **Pausing a site writes `ask`, which is not the user's own preference.**
