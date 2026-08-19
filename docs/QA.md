@@ -33,12 +33,15 @@ These tests verify that toggling the extension's controls correctly updates the 
 
 ### Item 2: Notifications toggle
 
-- [ ] **Test:** Open the extension popup. Toggle notifications **off** (disable the toggle). Reload `chrome://settings/content/notifications`. Toggle notifications **on** (enable the toggle) in the popup. Reload the settings page again.
-- [ ] **Expected result:** When the toggle is off, the setting reads "Don't allow sites to send notifications." When the toggle is on, the setting reads "Allow sites to send notifications."
+- [ ] **Test:** Open the extension popup with notifications **on** (the default). Reload `chrome://settings/content/notifications` and read the state. Then toggle notifications **off** in the popup and reload the settings page again.
+- [ ] **Expected result:**
+  - Toggle **on**: the page reads "Don't allow sites to send notifications" and carries Chrome's "controlled by an extension" banner. The extension writes `block`.
+  - Toggle **off**: the banner is gone and there is no extension-controlled entry at all. Whatever the user had chosen in their own Chrome settings is back in force.
+  - Off does **not** mean "Allow sites to send notifications". Off means the extension stops writing anything for this type — it never grants a permission on the user's behalf. See Item 9b, which checks this from the other direction.
 
 ### Item 3: Other content settings (Location, Camera, Microphone, Popups, Automatic Downloads, Sound)
 
-- [ ] **Test:** Repeat the pattern from Item 2 for each setting:
+- [ ] **Test:** Repeat the pattern from Item 2 for each setting — turn the toggle on, read the settings page, turn it off, read it again:
   - Location: `chrome://settings/content/location`
   - Camera: `chrome://settings/content/camera`
   - Microphone: `chrome://settings/content/microphone`
@@ -46,7 +49,7 @@ These tests verify that toggling the extension's controls correctly updates the 
   - Automatic downloads: `chrome://settings/content/automaticDownloads`
   - Sound: `chrome://settings/content/sound` (Chrome 141+ only; on older versions, the popup should surface this as unenforced)
 
-- [ ] **Expected result:** Each toggle correctly flips the corresponding setting. The browser UI reflects every change immediately or on reload.
+- [ ] **Expected result:** Turning a toggle **on** puts each corresponding type into its blocking state, shown under the "controlled by an extension" banner. Turning it **off** removes the extension's entry entirely: the banner disappears and the type returns to the user's own setting. No toggle ever flips the browser to "Allow". The browser UI reflects every change immediately or on reload.
 
 ---
 
@@ -55,7 +58,7 @@ These tests verify that toggling the extension's controls correctly updates the 
 ### Item 4: Session-only cookies
 
 - [ ] **Test:** Open the extension popup. Toggle session-only cookies **on**. Navigate to `chrome://settings/content/cookies`. Examine the state. Toggle session-only cookies **off** in the popup.
-- [ ] **Expected result:** When enabled, `chrome://settings/content/cookies` shows the session-only cookie state active. When disabled, the setting reverts. Note: enabling this logs the user out of every website on browser restart — this is expected behavior and is why the setting defaults to off.
+- [ ] **Expected result:** When enabled, `chrome://settings/content/cookies` shows the session-only cookie state active under the "controlled by an extension" banner. When disabled, the extension's entry disappears entirely — the banner is gone and the user's own cookie setting is back in force. The extension does not write `allow` on the way out; Item 9b covers why that matters. Note: enabling this logs the user out of every website on browser restart — this is expected behavior and is why the setting defaults to off.
 
 ---
 
