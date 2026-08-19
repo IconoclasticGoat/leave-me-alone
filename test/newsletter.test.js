@@ -32,6 +32,68 @@ describe('looksLikeNewsletter — positives', () => {
       <input type="email" placeholder="Email address"><button>Sign up</button>`));
     expect(looksLikeNewsletter(el)).toBe(true);
   });
+
+  // Observed live on three ConvertKit/Kit recipe blogs. Every structural gate
+  // already passed; only the word list failed, so these popups survived. Note
+  // the field is type=text named email_address, not type=email.
+  it('flags a ConvertKit recipe-blog popup that never says "newsletter"', () => {
+    const el = mount(overlay(`<h2>Send me the recipes</h2>
+      <input type="text" name="email_address" placeholder="Your Email">
+      <input type="text" name="fields[first_name]" placeholder="Your Name">
+      <button>SEND ME THE RECIPES</button>
+      <p>I’d like to receive more tips &amp; recipes from The Test Kitchen.</p>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
+
+  // The two live sites disagree on the apostrophe, so the match must not
+  // depend on it.
+  it('flags the same consent line with a straight apostrophe', () => {
+    const el = mount(overlay(`<h2>Get the recipes</h2>
+      <input type="text" name="email_address" placeholder="Your Email">
+      <button>GET THE RECIPES</button>
+      <p>I'd like to receive more from Spend Some Pennies.</p>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
+
+  it('flags a free-ebook lead magnet', () => {
+    const el = mount(overlay(`<h2>Download now</h2>
+      <p>Grab my free ebook of weeknight dinners.</p>
+      <input type="email" placeholder="Your Email"><button>Download</button>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
+
+  it('flags a free-guide lead magnet', () => {
+    const el = mount(overlay(`<h2>My free guide to sourdough</h2>
+      <input type="email" placeholder="Your Email"><button>Send it</button>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
+
+  it('flags a free-printable lead magnet', () => {
+    const el = mount(overlay(`<h2>Get my free printable meal planner</h2>
+      <input type="email" placeholder="Your Email"><button>Yes please</button>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
+
+  // Same dark pattern, phone field instead of email. Observed live as a
+  // full-screen modal on desktop and mobile alike. The consent boilerplate is
+  // legally mandated for US SMS marketing, which makes it a precise signal.
+  it('flags an SMS signup modal carrying SMS-marketing consent copy', () => {
+    const el = mount(overlay(`<h2>Signup for texts and get 10% off today</h2>
+      <input type="tel" placeholder="Your Phone Number">
+      <button>Get 10% Off</button>
+      <p>By submitting this form you agree to receive recurring automated
+      marketing text messages. Reply STOP to cancel. Msg &amp; data rates
+      may apply.</p>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
+
+  it('flags an SMS signup whose phone field is named rather than type=tel', () => {
+    const el = mount(overlay(`<h2>Text club</h2>
+      <input type="text" name="phone_number" placeholder="Mobile number">
+      <button>Join</button>
+      <p>Msg frequency varies. Reply HELP for help.</p>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
 });
 
 describe('looksLikeNewsletter — negatives', () => {
@@ -117,6 +179,75 @@ describe('looksLikeNewsletter — negatives', () => {
     const el = mount(overlay(`<h2>Join our newsletter</h2>
       <input type="email"><button>Go</button><a>Already have an account?</a>`));
     expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  // "Send me the ..." was proposed as a subscribe phrase and deliberately not
+  // added: passwordless auth uses the same words. This overlay has an email
+  // field, no password, and no other AUTH_MARKER, so the word list is the only
+  // thing standing between it and a broken login.
+  it('leaves a "send me the login link" auth overlay alone', () => {
+    const el = mount(overlay(`<h2>Welcome back</h2>
+      <p>Send me the link to continue.</p>
+      <input type="email"><button>Continue</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  // Accepting phone fields newly exposes us to OTP, checkout and address
+  // overlays. Each of these must stay untouched.
+  // Carries genuine SMS consent boilerplate — carriers' copy shows up on OTP
+  // screens too — so the SMS_MARKERS check passes and the auth marker is the
+  // only thing left refusing it.
+  it('leaves a one-time-code overlay alone', () => {
+    const el = mount(overlay(`<h2>Verify your number</h2>
+      <p>Enter the security code we sent to •••1234.
+      Msg &amp; data rates may apply.</p>
+      <input type="tel" name="code"><button>Verify</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves a checkout overlay with a phone field alone', () => {
+    const el = mount(overlay(`<h2>Shipping address</h2>
+      <input type="tel" name="phone"><input name="street"><input name="city">
+      <button>Continue to payment</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  // Small enough to slip past the input-count limit, and it carries real SMS
+  // consent copy — the opt-in checkbox at checkout. Only a commerce marker
+  // stops this one.
+  it('leaves a two-field checkout step carrying SMS opt-in copy alone', () => {
+    const el = mount(overlay(`<h2>Delivery address</h2>
+      <input type="tel" name="phone"><input name="zip">
+      <p>Text me order updates. Msg &amp; data rates may apply.</p>
+      <button>Continue to payment</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('refuses a phone field with no SMS-marketing copy', () => {
+    // A bare phone field is never enough on its own — an SMS marker has to
+    // carry it, or every contact form becomes a target.
+    const el = mount(overlay(`<h2>Contact us</h2>
+      <input type="tel" placeholder="Phone"><button>Send</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('refuses SMS-marketing copy with no phone or email field', () => {
+    const el = mount(overlay(`<p>Msg &amp; data rates may apply. Reply STOP to
+      cancel.</p><button>OK</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  it('leaves an inline SMS signup block alone (not an overlay)', () => {
+    // Huckberry's footer carries consent copy identical to its modal's. The
+    // overlay gate is the only thing telling them apart.
+    document.body.innerHTML = `<div id="m" style="position:relative">
+      <input type="tel" placeholder="Your Phone Number"><button>Sign up</button>
+      <p>Recurring automated marketing text messages. Msg &amp; data rates may
+      apply.</p></div>`;
+    for (const el of document.querySelectorAll('*')) {
+      el.getBoundingClientRect = () => ({ width: 400, height: 200 });
+    }
+    expect(looksLikeNewsletter(document.querySelector('#m'))).toBe(false);
   });
 
   it('refuses a magic link even under newsletter copy', () => {
