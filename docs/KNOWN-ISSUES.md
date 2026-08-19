@@ -46,6 +46,16 @@ batching if that list grew into the hundreds.
 
 **The cosmetic fallback misses banners whose only cookie wording sits in a link.** To stop it hiding ordinary page furniture, cookie-word matching is scoped to element prose and excludes `<a>`/`<button>` label text. A banner phrased "By continuing to browse you agree to our [Cookie Policy]" with an Accept button is therefore missed. This is the safe direction — under-hiding never breaks a page — but it is a real gap, not a theoretical one.
 
+**`target.parent` is ignored, so consent toggles are matched page-wide.** 530
+`parent` blocks across 61 rules scope a selector to an ancestor — typically
+"the `.category-item` whose header reads *Performance Cookies*". `queryAll`
+never reads the field, so such a target resolves against the whole document
+and takes the *first* match anywhere. Where a preference centre lists several
+categories with identical inner markup, a per-category read or toggle can
+land on the wrong category. It did not block investing.com — that panel uses
+the newer `.ot-cat-item` markup and ships every switch already off — but it
+will misfire on a panel that defaults a category on.
+
 **Newsletter heuristic residuals.** A cart drawer carrying both a discount code and an email input is dismissed. Commerce vetoes (`your bag`, `checkout`, `subtotal`) would close it. The heuristic is phrase-based and will never be exhaustive; per-site pause is the designed escape hatch.
 
 **`stripWww` is not a public-suffix list.** Pause strips a leading `www.` only — `m.example.com` and `www2.example.com` are treated as distinct domains. True eTLD+1 needs a PSL, which this zero-dependency build does not carry. This now governs the `declarativeNetRequest` domain exclusions and the content-setting patterns as well, not just DOM-layer pause.

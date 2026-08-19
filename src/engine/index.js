@@ -9,6 +9,8 @@ export async function runEngine(bundle, root = document, { timeoutMs = 8000 } = 
 
   for (const [name, config] of Object.entries(rules)) {
     const cmp = new CMP(name, config, REJECT_ALL);
+    // A rule that cannot act must never shadow a later rule that can.
+    if (!cmp.canAct()) continue;
 
     let detected = false;
     try {

@@ -31,7 +31,24 @@ export function queryAll(root, target) {
     if (target.textFilter) els = els.filter((el) => matchesText(el, target.textFilter));
     if (target.displayFilter) els = els.filter((el) => isShown(el));
     if (target.childFilter) {
-      els = els.filter((el) => queryAll(el, target.childFilter).length > 0);
+      // Two things this has to get right, and both used to be wrong.
+      //
+      // childFilter wraps its selector in a `target` object — all 258 in the
+      // bundle have the shape {target:{selector,...}}. Recursing on the
+      // wrapper looked for `wrapper.selector`, found nothing, and so matched
+      // no child ever, which silently emptied every un-negated childFilter.
+      // The bare shape is accepted too, in the same spirit as matchesText
+      // tolerating a bare string where an array belongs.
+      //
+      // childFilterNegate then inverts the test: keep the elements that do
+      // NOT contain the child. Ignoring it does not merely lose a filter, it
+      // applies the opposite one — `onetrust` negates a childFilter to tell
+      // its banner apart from the preference-centre variant.
+      const spec = target.childFilter.target ?? target.childFilter;
+      const hasChild = (el) => queryAll(el, spec).length > 0;
+      els = target.childFilterNegate
+        ? els.filter((el) => !hasChild(el))
+        : els.filter(hasChild);
     }
     return els;
   } catch {

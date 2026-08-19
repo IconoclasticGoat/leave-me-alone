@@ -81,13 +81,31 @@ describe('queryAll never throws into the page', () => {
     expect(r[0].id).toBe('v');
   });
 
-  it('applies childFilter, requiring a descendant match', () => {
-    document.body.innerHTML =
-      `<div class="row" id="has"><input type="checkbox"></div>` +
-      `<div class="row" id="lacks"><span>no input</span></div>`;
-    const r = queryAll(document, { selector: '.row', childFilter: { selector: 'input' } });
+  const ROWS =
+    `<div class="row" id="has"><input type="checkbox"></div>` +
+    `<div class="row" id="lacks"><span>no input</span></div>`;
+
+  // Every childFilter in the bundle wraps its selector in `target`; the bare
+  // shape is accepted as well, so both are pinned here.
+  it.each([
+    ['wrapped in target', { target: { selector: 'input' } }],
+    ['bare', { selector: 'input' }],
+  ])('applies childFilter (%s), requiring a descendant match', (_label, childFilter) => {
+    document.body.innerHTML = ROWS;
+    const r = queryAll(document, { selector: '.row', childFilter });
     expect(r).toHaveLength(1);
     expect(r[0].id).toBe('has');
+  });
+
+  it('inverts childFilter when childFilterNegate is set', () => {
+    document.body.innerHTML = ROWS;
+    const r = queryAll(document, {
+      selector: '.row',
+      childFilter: { target: { selector: 'input' } },
+      childFilterNegate: true,
+    });
+    expect(r).toHaveLength(1);
+    expect(r[0].id).toBe('lacks');
   });
 });
 
