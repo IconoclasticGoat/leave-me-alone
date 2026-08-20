@@ -35,11 +35,31 @@ See [docs/QA.md](docs/QA.md) for the checklist. This covers the `chrome.contentS
 
 **Primary:** cookie banners · notifications · location · newsletter popups
 
-**More, on by default:** Global Privacy Control · camera & microphone · popups & auto-downloads · autoplay sound
+**More, on by default:** Global Privacy Control · popups & auto-downloads · camera & microphone
 
-**More, off by default:** hide chat bubbles · block Google one-tap · session-only cookies
+**More, off by default:** autoplay sound · hide chat bubbles · block Google one-tap · session-only cookies
+
+Autoplay sound is off by default on purpose; see Item 3b in [docs/QA.md](docs/QA.md).
 
 Known gaps and deferred findings are recorded in [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
+
+## Publishing
+
+```bash
+npm run package
+```
+
+builds `dist/` and writes the uploadable zip, manifest at its root.
+
+Listing copy and the permission justifications live in
+[docs/STORE-LISTING.md](docs/STORE-LISTING.md). `test/store-listing.test.js`
+holds every field inside the store's character budget and fails if the manifest
+gains a permission the listing does not justify. A rejection on either count
+costs a review round trip measured in days.
+
+Why the extension asks for `<all_urls>`, and why narrowing it would cost the
+GPC signal while leaving the install prompt unchanged, is recorded in
+[docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 
 ## Privacy
 
@@ -51,4 +71,4 @@ Cookie-banner rules are vendored from [Consent-O-Matic](https://github.com/cavi-
 
 ## License
 
-TBD
+[MIT](LICENSE). The vendored Consent-O-Matic rules are MIT too — see [THIRD_PARTY.md](THIRD_PARTY.md).
