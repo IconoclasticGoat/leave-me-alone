@@ -22,6 +22,15 @@ export class CMP {
     return (this.config.methods ?? []).find((m) => m.name === name);
   }
 
+  /**
+   * Whether run() would actually do anything. Opener rules carry their work in
+   * a UTILITY method, which is not in ORDER — run() skips every method and
+   * returns cleanly, which reads as success.
+   */
+  canAct() {
+    return ORDER.some((name) => this.method(name)?.action);
+  }
+
   /** Throws UnsupportedAction if any method needs an action we do not implement. */
   async run(root) {
     for (const name of ORDER) {

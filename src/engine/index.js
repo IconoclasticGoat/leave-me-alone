@@ -7,6 +7,8 @@ const REJECT_ALL = { shouldAllow: () => false };
 export async function runEngine(bundle, root = document, { timeoutMs = 8000 } = {}) {
   const rules = bundle?.rules ?? {};
 
+  let opener = null; // a rule that matched but carries nothing we can run
+
   for (const [name, config] of Object.entries(rules)) {
     const cmp = new CMP(name, config, REJECT_ALL);
 
@@ -17,6 +19,13 @@ export async function runEngine(bundle, root = document, { timeoutMs = 8000 } = 
       continue; // a malformed detector must not stop the sweep
     }
     if (!detected) continue;
+
+    // Matching is not the same as being able to act. Claiming the page here
+    // would stop the sweep and take the cosmetic fallback down with it.
+    if (!cmp.canAct()) {
+      opener ??= name;
+      continue;
+    }
 
     try {
       await Promise.race([
@@ -31,5 +40,6 @@ export async function runEngine(bundle, root = document, { timeoutMs = 8000 } = 
     }
   }
 
+  if (opener) return { handled: null, reason: 'no-actionable-method', cmp: opener };
   return { handled: null, reason: 'no-cmp-detected' };
 }

@@ -55,6 +55,42 @@ describe('runEngine on a real Cookiebot banner', () => {
     expect(r.reason).toBe('no-cmp-detected');
   });
 
+  it('does not claim a rule whose methods it can never run', async () => {
+    // Thirteen vendored rules are openers: their only real method is UTILITY,
+    // which is not in ORDER. run() skips every method and throws nothing, so
+    // the rule used to report success having done nothing at all — and the
+    // sweeper takes `handled` as licence to stop, fallback included.
+    const bundle = { rules: { opener: {
+      detectors: [{ presentMatcher: [{ type: 'css', target: { selector: 'body' } }],
+                    showingMatcher: [{ type: 'css', target: { selector: 'body' } }] }],
+      methods: [{ name: 'UTILITY', action: { type: 'click', target: { selector: 'button' } } }],
+    }}};
+    const r = await runEngine(bundle, document);
+    expect(r.handled).toBe(null);
+    expect(r.reason).toBe('no-actionable-method');
+  });
+
+  it('falls through an opener to a later rule that can act', async () => {
+    // The ordering that saved OneTrust on most sites is not guaranteed: an
+    // opener matching first must not shut the door on a rule that works.
+    document.body.innerHTML = `<div id="bar">cookies <button id="go">Reject</button></div>`;
+    const bundle = { rules: {
+      opener: {
+        detectors: [{ presentMatcher: [{ type: 'css', target: { selector: 'body' } }],
+                    showingMatcher: [{ type: 'css', target: { selector: 'body' } }] }],
+        methods: [{ name: 'UTILITY', action: { type: 'click', target: { selector: '#go' } } }],
+      },
+      real: {
+        detectors: [{ presentMatcher: [{ type: 'css', target: { selector: 'body' } }],
+                    showingMatcher: [{ type: 'css', target: { selector: 'body' } }] }],
+        methods: [{ name: 'HIDE_CMP', action: { type: 'hide', target: { selector: '#bar' } } }],
+      },
+    }};
+    const r = await runEngine(bundle, document);
+    expect(r.handled).toBe('real');
+    expect(document.querySelector('#bar').style.display).toBe('none');
+  });
+
   it('abandons a rule that needs an unsupported action', async () => {
     const bundle = { rules: { fake: {
       detectors: [{ presentMatcher: [{ type: 'css', target: { selector: 'body' } }],
