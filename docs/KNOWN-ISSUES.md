@@ -46,6 +46,17 @@ batching if that list grew into the hundreds.
 
 **The cosmetic fallback misses banners whose only cookie wording sits in a link.** To stop it hiding ordinary page furniture, cookie-word matching is scoped to element prose and excludes `<a>`/`<button>` label text. A banner phrased "By continuing to browse you agree to our [Cookie Policy]" with an Accept button is therefore missed. This is the safe direction — under-hiding never breaks a page — but it is a real gap, not a theoretical one.
 
+**The iframe pass in the cosmetic fallback runs off a hand-written origin
+allowlist.** `CMP_FRAME_HOSTS` in `src/content/cosmetic.js` names thirteen
+consent-frame origins, and now governs which frames `start()` attaches a
+`ResizeObserver` to as well as what the fallback will hide. A CMP that serves its UI from an origin not on that
+list is still invisible to both layers, and the list has to be maintained by
+hand — nothing in the vendored rule bundle carries frame origins to derive it
+from. The alternative, treating any fixed wrapper around any cross-origin
+frame as a banner, was rejected: that shape equally describes a Stripe
+checkout, a paywall and a video lightbox, and hiding one of those breaks the
+page in a way under-hiding never does.
+
 **Newsletter heuristic residuals.** A cart drawer carrying both a discount code and an email input is dismissed. Commerce vetoes (`your bag`, `checkout`, `subtotal`) would close it. The heuristic is phrase-based and will never be exhaustive; per-site pause is the designed escape hatch.
 
 **`stripWww` is not a public-suffix list.** Pause strips a leading `www.` only — `m.example.com` and `www2.example.com` are treated as distinct domains. True eTLD+1 needs a PSL, which this zero-dependency build does not carry. This now governs the `declarativeNetRequest` domain exclusions and the content-setting patterns as well, not just DOM-layer pause.
@@ -136,3 +147,18 @@ three rules keep working. One fewer warning, no functional change.
 Reviews caught the same failure six times: a test asserting exactly the right thing while proving nothing, because its fixture tripped an unrelated condition before reaching the behaviour under test. The cause is structural — this code is a stack of veto guards, and **veto guards mask each other by construction**, so a fixture aimed at one usually fails another first.
 
 A passing test is therefore not evidence that a guard is protected. The reliable check is mutation: delete the guard, run the focused test file, confirm it goes red. That takes about two seconds and found eleven unprotected guards across this branch. Treat it as the merge gate for any change to `src/content/` or `src/engine/`.
+- **13 of 202 rules report success while doing nothing.** `ORDER` in `cmp.js`
+  runs `OPEN_OPTIONS`, `DO_CONSENT`, `SAVE_CONSENT`, `HIDE_CMP`. Thirteen
+  vendored rules — `sourcepoint`, `sourcepointpopup`, `onetrust_banner`,
+  `trustarcbar`, `google_eomdialog`, `google_consentdomain_1`,
+  `hampshire.policeopen`, `koboopen`, `linkedin_popup`, `nordpoolgroupopen`,
+  `opensuchenmobile.de`, `paypal_banner`, `thenextwebopen` — carry no
+  actionable method in that list; their real work is a `UTILITY` method that
+  opens the dialog a *second* rule then handles. `cmp.run()` skips every
+  method, throws nothing, and `runEngine` returns `{ handled: <name>, reason:
+  'ok' }`. The sweeper sets `state.handled = true` on that, which suppresses
+  both further engine passes **and** the cosmetic fallback for the rest of the
+  page's life. Severity is limited by ordering — `onetrust` is evaluated
+  before `onetrust_banner`, so the working rule usually wins first — but the
+  failure mode is silent and total when it does bite. A rule with no
+  actionable method should report `handled: null`.
