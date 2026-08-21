@@ -55,7 +55,7 @@ On by default:
 • Block camera & microphone prompts
 
 Off by default, switch on if you want them:
-• Mute all sites (silences them completely, not just autoplay)
+• Mute all sites
 • Hide chat bubbles
 • Block Google one-tap sign-in
 • Delete all cookies on quit
@@ -72,9 +72,9 @@ Your switch settings are the only thing saved, and they are saved in your own Ch
 
 The consent-platform rules are bundled inside the extension and updated only when the extension itself updates. Nothing is fetched at runtime. There is no server that could see where you browse, because there is no server.
 
-HONEST ABOUT THE LIMITS
+LIMITATIONS
 
-Cookie banners are an arms race. This handles the major consent platforms and falls back to hiding banners it doesn't recognise, but a site can always do something new. Blocking prompts is different. That runs through Chrome's own permission settings, so it is not a heuristic and does not miss.
+Cookie banners are an arms race. This handles the major consent platforms and falls back to hiding banners it doesn't recognize, but a site can always do something new.
 
 OPEN SOURCE
 
