@@ -121,43 +121,41 @@ three rules keep working. One fewer warning, no functional change.
 
 **Every sweep evaluates all 202 rules' detectors** — 207 detectors, 409 selectors, re-run on each debounced mutation for the observer's lifetime, in every frame, until a CMP is handled. A cheap first-pass filter (a combined selector, or sniffing for `__tcfapi` / `OneTrust` / `Cookiebot` globals) before the per-rule loop would cut most of it.
 
-**Sweep scheduling no longer watches only mutations, but still watches only
-some of them.** `start()` used to disconnect 10 s after `document_idle`
-regardless of page activity, debounce with no max-wait, and clear its own
-pending sweep on the way out. All three are fixed: the deadline is now a quiet
-period reset by each mutation (capped by `MAX_LIFE_MS`), the debounce is
-bounded by `MAX_WAIT_MS`, and `stop()` runs an outstanding sweep instead of
-discarding it.
+**Sweep scheduling.** `start()` originally disconnected 10s after
+`document_idle` regardless of activity, debounced with no max-wait, cleared its
+own pending sweep on the way out, and watched only childList records on
+`root.body`. All of that is fixed across two passes: the debounce is bounded by
+`MAX_WAIT_MS`, `stop()` runs an outstanding sweep rather than discarding it,
+allowlisted consent frames get a `ResizeObserver` and a `load` listener, and the
+observer now watches the five attributes a reveal goes through as well as
+childList.
 
-What made the `bbc.com/news` case reachable was none of those. By
-`document_idle` the Sourcepoint container and its iframe are already in the
-DOM and already `display: block`; the reveal comes later and produces **no
-mutation record in this document at all**. `start()` now attaches a
-`ResizeObserver` and a `load` listener to each allowlisted consent frame,
-because layout is the one thing that must happen for an overlay to become
-visible. Verified in a browser: the `ResizeObserver` fired 9 ms after the
-overlay appeared and 76 ms *before* the first mutation record of any kind —
-the `load` event never fired at all, the frame having loaded before the
-listener was attached.
+The quiet deadline is gone entirely. Making it a quiet period rather than a
+fixed lifetime was not enough — it still expires on a page that was quiet from
+the *start*, which is where late modals live. `natashaskitchen.com` emits zero
+mutations of any kind over 10s of scrolling and reveals a Kit signup at ~15s.
+`MAX_LIFE_MS` (60s) is now the only bound.
 
 What is still missing:
 
-- **In-page CMPs revealed by a class or style toggle.** The observer watches
-  `{ childList: true, subtree: true }` on `root.body` and no `attributes`, so
-  a banner that is inserted early and un-hidden later is caught only if some
-  unrelated childList mutation happens to schedule a sweep. Adding
-  `attributes: true` is the general fix and was deliberately deferred: class
-  mutations fire constantly on a React site, and with a bounded debounce that
-  is roughly a sweep per second, each evaluating all 202 rules and 207
-  detectors. It needs the cheap pre-filter under **Performance** first.
+- **Anything that appears after `MAX_LIFE_MS`.** 60s covers the 15-30s
+  newsletter triggers seen so far, but exit-intent and deep-scroll popups can
+  fire much later. Watching a silent page is free, so raising this is a
+  one-constant change if QA finds later-firing cases; the reason not to make it
+  unbounded is pages that genuinely churn, where each sweep still evaluates all
+  202 rules.
 - **Head insertions.** The observer roots at `root.body`, so a `<style>` or
-  `<script>` appended to `<head>` raises nothing. Rooting at
-  `documentElement` would cost little.
+  `<script>` appended to `<head>` raises nothing. Rooting at `documentElement`
+  would cost little.
+- **Per-sweep cost is unreduced.** The cheap pre-filter under **Performance**
+  was the stated prerequisite for attribute observation. Attribute observation
+  landed without it because the measured cost on the sites that needed it was
+  zero mutations in 10s; the filter still matters for genuinely busy apps, and
+  `attributeFilter` plus `MAX_WAIT_MS` is what stands in for it today.
 
-Absolute timing still needs a real Chrome profile. Headless and preview
-browsers suspend rendering in a backgrounded tab, which makes a CMP overlay
-read as 0x0 long after it is live and turns any latency measurement into a
-measurement of the harness — only the *ordering* above survives that. See
+Absolute reveal timing still needs a real Chrome profile. Headless and preview
+browsers suspend rendering in a backgrounded tab, which makes an overlay read
+as 0x0 long after it is live — only *ordering* survives that. See
 [QA.md](QA.md) Item 6b.
 
 ## Correctness details
