@@ -4,19 +4,13 @@ A Chrome extension that tells every website you visit to leave you alone — nec
 
 Inspired by [a Bluesky post by Helen Barnard](https://bsky.app/profile/helenbarnard.bsky.social/post/3msv2feu6cc2i):
 
-> But why can't I just have a google setting that just automatically tells every website I visit:
->
-> - Only necessary cookies
-> - Block notifications
-> - I don't want to sign up to any newsletters
->
-> Surely that should be possible.
-
-## Status
-
-**Complete, unverified on real websites.**
-
-The code is complete and all 221 unit tests pass. The extension has not yet been tested in a real Chrome browser against live websites — this verification requires manual QA.
+```
+But why can't I just have a google setting that just automatically tells every website I visit: 
+- Only necessary cookies 
+- Block notifications 
+- I don't want to sign up to any newsletters 
+? Surely that should be possible.
+```
 
 ### To install and test:
 
