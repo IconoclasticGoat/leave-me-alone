@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="stage.css">
+<style>
+  .head { position: absolute; left: 80px; top: 56px; width: 1120px; z-index: 3; }
+  h1 { font-size: 42px; line-height: 1.05; margin: 10px 0 0; }
+  .sub { max-width: 64ch; font-size: 16px; }
+  .band { left: 80px; width: 1120px; height: 246px; position: absolute; }
+  .band iframe { width: 1120px; height: 246px; }
+  #before { top: 268px; }
+  #after  { top: 538px; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">Reject cookie banners</div>
+  <h1>It picks &ldquo;necessary only&rdquo; before you get there.</h1>
+  <p class="sub">200+ consent platforms are answered outright. Anything it doesn&rsquo;t
+     recognise gets hidden instead, so the page is yours either way.</p>
+</div>
+
+<div class="window band" id="before">
+  <div class="tag">Without the extension</div>
+  <iframe src="/demo/index.html?only=cookies" scrolling="no"></iframe>
+</div>
+
+<div class="window band" id="after">
+  <div class="tag good">With Leave Me Alone</div>
+  <iframe src="/demo/after.html?only=cookies" scrolling="no"></iframe>
+</div>

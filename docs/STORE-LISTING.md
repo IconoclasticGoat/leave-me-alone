@@ -55,7 +55,7 @@ On by default:
 • Block camera & microphone prompts
 
 Off by default, switch on if you want them:
-• Block autoplaying sound
+• Mute all sites (silences them completely, not just autoplay)
 • Hide chat bubbles
 • Block Google one-tap sign-in
 • Delete all cookies on quit
@@ -105,7 +105,7 @@ This is the only thing the extension writes. It is read back only by the extensi
 
 <!-- field: justification_contentSettings max: 1000 (self-imposed) -->
 ```
-This is the enforcement mechanism for six of the extension's switches. The extension calls chrome.contentSettings to set the browser's own defaults for notifications, location, camera, microphone, popups, automatic downloads, autoplaying sound, and cookies.
+This is the enforcement mechanism for six of the extension's switches. The extension calls chrome.contentSettings to set the browser's own defaults for notifications, location, camera, microphone, popups, automatic downloads, sound, and cookies.
 
 Setting Chrome's default is the point: it means a site cannot prompt in the first place, rather than the extension racing to dismiss a prompt after it appears. There is no other API that can pre-answer a permission prompt.
 
@@ -170,18 +170,10 @@ is a bad first impression.
 
 ## Before submitting
 
-- **Make the repository public**, or cut the OPEN SOURCE paragraph. The
-  detailed description tells readers to go read the source and links to
-  github.com/IconoclasticGoat/leave-me-alone, which is private as of this
-  writing. Submitted unchanged against a private repo, the listing's most
-  trust-building claim is a dead link, on the one extension that asks for
-  access to every site. The history was scanned for credentials and is clean,
-  so this is a decision rather than a cleanup job. Whoever submits owns the
-  call; the copy assumes public.
+- ~~**Make the repository public**~~ — done. github.com/IconoclasticGoat/leave-me-alone
+  is public, so the OPEN SOURCE paragraph's link resolves and the copy stands
+  as written.
 - **Screenshot**, 1280×800 or 640×400, at least one. The popup with its
   switches, over a real site showing a banner it has dealt with, is the
   obvious shot.
-- **QA Item 3b**, which decides whether "Block autoplaying sound" keeps both
-  its off-by-default state and its current label. The bullet for it in the
-  detailed description sits under "Off by default" to match.
 - **Store icon**, 128×128. `icons/active-128.png` already qualifies.

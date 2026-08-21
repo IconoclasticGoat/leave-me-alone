@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="stage.css">
+<style>
+  .copy { position: absolute; left: 80px; top: 236px; width: 384px; z-index: 3; }
+  h1 { font-size: 56px; line-height: 1.04; }
+  .window { position: absolute; left: 500px; top: 74px; width: 780px; height: 652px; border-radius: 10px 0 0 10px; }
+  .window iframe { width: 780px; height: 652px; }
+  .popup-shell { position: absolute; left: 920px; top: 140px; width: 324px; height: 477px; z-index: 4; }
+  .popup-shell iframe { width: 324px; height: 477px; }
+</style>
+
+<div class="copy">
+  <div class="eyebrow">Leave Me Alone</div>
+  <h1>Every site asks.<br>You answer once.</h1>
+  <p class="sub">Cookies, notifications, location, newsletters — decided in advance,
+     then applied to every site you visit, before it gets a chance to ask.</p>
+</div>
+
+<div class="window">
+  <iframe src="https://example.com" scrolling="no"></iframe>
+</div>
+
+<div class="popup-shell">
+  <iframe src="/ext/popup/harness.html" scrolling="no"></iframe>
+</div>

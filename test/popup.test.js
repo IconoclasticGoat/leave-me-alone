@@ -18,15 +18,23 @@ describe('popup', () => {
 
   it('leaves autoplay sound off by default', () => {
     // Deliberate, and load-bearing for the store listing, which advertises it
-    // under "off by default". Chrome's `sound` block is the same control as
-    // "Don't allow sites to play sound", whose scope is wider than this
-    // toggle's label claims. See the note in src/settings.js.
+    // under "off by default". QA Item 3b established that Chrome's `sound`
+    // block is a full mute, not autoplay suppression, so on-by-default would
+    // ship a silent YouTube. See the note in src/settings.js.
     expect(DEFAULTS.autoplaySound).toBe(false);
   });
 
   it('puts exactly the four complaint toggles in the primary group', () => {
     expect(TOGGLE_GROUPS.primary.map((t) => t.key))
       .toEqual(['cookieBanners', 'notifications', 'location', 'newsletters']);
+  });
+
+  // The label alone still undersells a full mute: "Mute all sites" reads as
+  // "sites don't make noise at me", not "play does nothing". QA Item 3b.
+  it('warns that the mute toggle survives pressing play', () => {
+    const t = TOGGLE_GROUPS.more.find((t) => t.key === 'autoplaySound');
+    expect(t.label).toBe('Mute all sites');
+    expect(t.warning).toMatch(/press play/i);
   });
 
   it('warns on the session-cookie toggle', () => {
@@ -111,7 +119,7 @@ describe('markUnenforced', () => {
 
     const version = lines.find((l) => l.includes('Chrome version'));
     const pattern = lines.find((l) => l.includes('192.168.1.1'));
-    expect(version).toContain('Block autoplaying sound');
+    expect(version).toContain('Mute all sites');
     // The version sentence must not absorb the pattern failure's toggle —
     // that is the exact lie this whole split exists to stop telling.
     expect(version).not.toContain('Block location requests');
@@ -148,7 +156,7 @@ describe('markUnenforced', () => {
     markUnenforced(doc, [{ type: 'sound', settingKey: 'autoplaySound', error: 'unsupported' }]);
     const text = doc.querySelector('#errors').textContent;
     expect(text).not.toContain('192.168.1.1');
-    expect(text).toContain('Block autoplaying sound');
+    expect(text).toContain('Mute all sites');
   });
 });
 
@@ -310,7 +318,7 @@ describe('init', () => {
 
     await init();
 
-    expect(doc.querySelector('#errors').textContent).toContain('Block autoplaying sound');
+    expect(doc.querySelector('#errors').textContent).toContain('Mute all sites');
   });
 
   it('offers Pause on an ordinary host', async () => {
