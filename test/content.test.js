@@ -168,13 +168,50 @@ describe('sweeper scheduling', () => {
     expect(sweep).not.toHaveBeenCalled();
   });
 
-  it('stops sweeping once the page goes quiet', async () => {
+  it('is still watching a page that has been silent since load', async () => {
+    // natashaskitchen.com: zero mutations of any kind in the first 10s, and a
+    // newsletter modal revealed at ~15s. A quiet deadline expires on a page
+    // that was quiet from the start, so the sweeper was already gone before
+    // the thing it exists to catch appeared. Watching a silent page costs
+    // nothing — there is nothing to deliver — so only the lifetime cap bounds it.
     const { sweep } = startSpied();
+    await vi.advanceTimersByTimeAsync(15_000);
     await mutate();
-    await vi.advanceTimersByTimeAsync(11_000);
-    sweep.mockClear();
-    await mutate();
-    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sweep).toHaveBeenCalled();
+  });
+
+  it('sweeps when an element already in the DOM is revealed by a style change', async () => {
+    // The Kit/ConvertKit pattern: the overlay is inserted at ~440ms and shown
+    // much later by flipping its own style. Nothing is added or removed, so a
+    // childList-only observer never hears about the one moment that matters.
+    document.body.innerHTML = `<div id="m" style="display:none">hidden</div>`;
+    const { sweep } = startSpied();
+    document.querySelector('#m').style.display = 'flex';
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sweep).toHaveBeenCalled();
+  });
+
+  it('sweeps when an element is revealed by a class change', async () => {
+    document.body.innerHTML = `<div id="m" class="hidden">hidden</div>`;
+    const { sweep } = startSpied();
+    document.querySelector('#m').className = 'visible';
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sweep).toHaveBeenCalled();
+  });
+
+  it('ignores attribute churn that cannot reveal anything', async () => {
+    // The filter is what keeps this affordable on a busy app: data-* and
+    // aria-live updates fire constantly and never uncover a modal.
+    document.body.innerHTML = `<div id="m" data-count="1">x</div>`;
+    const { sweep } = startSpied();
+    for (let i = 0; i < 5; i += 1) {
+      document.querySelector('#m').setAttribute('data-count', String(i));
+      await Promise.resolve();
+    }
+    await vi.advanceTimersByTimeAsync(2_000);
     expect(sweep).not.toHaveBeenCalled();
   });
 });

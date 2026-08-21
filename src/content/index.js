@@ -10,12 +10,17 @@ const DEBOUNCE_MS = 300;
 // by every mutation, so a page mutating faster than DEBOUNCE_MS never sweeps
 // at all — the deadline arrives having run nothing.
 const MAX_WAIT_MS = 1_000;
-// Measured from the last mutation, not from document_idle: a CMP that waits
-// on a network round trip must not fall off the end of a fixed lifetime.
-const QUIET_MS = 10_000;
-// The counterweight to that reset — an animating page must not hold an
-// observer open for the life of the tab.
+// How long to keep watching. There is no quiet deadline: a deadline measured
+// from the last mutation still expires on a page that was quiet from the
+// start, which is exactly where late modals live — natashaskitchen.com issues
+// zero mutations of any kind in its first 10s and reveals a signup at ~15s.
+// An observer over a silent page has nothing to deliver and costs nothing, so
+// the only bound that earns its keep is a ceiling on how long we watch at all.
 const MAX_LIFE_MS = 60_000;
+// Attributes that can uncover something already in the DOM. Unfiltered
+// attribute observation is what makes this expensive on a busy app; these five
+// are the ones a reveal actually goes through.
+const REVEAL_ATTRS = ['style', 'class', 'hidden', 'aria-hidden', 'open'];
 const MAX_ERRORS = 2;
 
 export function createSweeper({ settings, bundle, root = document, engine = runEngine }) {
@@ -65,7 +70,6 @@ export function createSweeper({ settings, bundle, root = document, engine = runE
     start() {
       let timer = null;
       let pendingSince = 0;
-      let quiet = null;
       let life = null;
       const watched = new WeakSet();
 
@@ -82,8 +86,6 @@ export function createSweeper({ settings, bundle, root = document, engine = runE
         clearTimeout(timer);
         const cap = pendingSince + MAX_WAIT_MS - Date.now();
         timer = setTimeout(run, Math.max(0, Math.min(DEBOUNCE_MS, cap)));
-        clearTimeout(quiet);
-        quiet = setTimeout(() => state.stop(), QUIET_MS);
       }
 
       // A consent frame can be revealed with no mutation in this document at
@@ -110,11 +112,15 @@ export function createSweeper({ settings, bundle, root = document, engine = runE
       }
 
       const observer = new MutationObserver(schedule);
-      observer.observe(root.body ?? root, { childList: true, subtree: true });
+      observer.observe(root.body ?? root, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: REVEAL_ATTRS,
+      });
 
       state.stop = () => {
         observer.disconnect();
-        clearTimeout(quiet);
         clearTimeout(life);
         // Never discard an outstanding sweep: shutting down used to clear the
         // pending timer, so a mutation just before the deadline was lost.
@@ -123,7 +129,6 @@ export function createSweeper({ settings, bundle, root = document, engine = runE
       };
 
       life = setTimeout(() => state.stop(), MAX_LIFE_MS);
-      quiet = setTimeout(() => state.stop(), QUIET_MS);
       watchFrames();
       state.sweep();
     },
