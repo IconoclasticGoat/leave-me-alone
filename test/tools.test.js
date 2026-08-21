@@ -81,6 +81,20 @@ describe('queryAll never throws into the page', () => {
     expect(r[0].id).toBe('v');
   });
 
+  it('inverts childFilter when childFilterNegate is set', () => {
+    // Two vendored rules carry childFilterNegate, and dropping it does not
+    // weaken the detector — it reverses it. `onetrust` asks for a banner with
+    // no preference centre inside it; ignoring the flag makes it demand one,
+    // so the rule never fires on the plain banner it exists to claim.
+    document.body.innerHTML = `
+      <div class="row" id="plain"><span>text</span></div>
+      <div class="row" id="withinput"><input></div>`;
+    const r = queryAll(document, {
+      selector: '.row', childFilter: { selector: 'input' }, childFilterNegate: true,
+    });
+    expect(r.map((e) => e.id)).toEqual(['plain']);
+  });
+
   it('applies childFilter, requiring a descendant match', () => {
     document.body.innerHTML =
       `<div class="row" id="has"><input type="checkbox"></div>` +

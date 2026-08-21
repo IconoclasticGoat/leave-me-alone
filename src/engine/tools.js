@@ -31,7 +31,11 @@ export function queryAll(root, target) {
     if (target.textFilter) els = els.filter((el) => matchesText(el, target.textFilter));
     if (target.displayFilter) els = els.filter((el) => isShown(el));
     if (target.childFilter) {
-      els = els.filter((el) => queryAll(el, target.childFilter).length > 0);
+      // childFilterNegate reverses the test rather than weakening it: dropping
+      // the flag turns "a banner with no preference centre inside" into "a
+      // banner with one", which is never the shape the rule was written for.
+      const want = !target.childFilterNegate;
+      els = els.filter((el) => (queryAll(el, target.childFilter).length > 0) === want);
     }
     return els;
   } catch {
