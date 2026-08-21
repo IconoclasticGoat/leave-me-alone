@@ -115,6 +115,42 @@ These tests verify that the extension correctly dismisses consent banners and di
   - If the platform provides a preferences screen or settings interface, confirm that non-essential tracking categories are explicitly disabled (off).
   - Page layout is unaffected; no content is broken or misaligned.
 
+### Item 6b: A CMP served from an iframe — the bbc.com/news case
+
+The failure this catches: a CMP that renders its banner inside a cross-origin
+iframe splits it across a frame boundary, and neither half looks like a banner
+on its own. Nothing in the unit suite can time it, and the fixtures are a
+snapshot of one site on one day.
+
+- [ ] **Test:** With the cookie-banner toggle on, load `https://www.bbc.com/news`
+      (Sourcepoint, frame served from `cdn.privacy-mgmt.com`) on a profile that
+      has not accepted before. Watch for up to 15 seconds.
+- [ ] **Expected result:** the "Terms of Use & Privacy" modal and its dimmed
+      backdrop disappear, and the page underneath is clickable and scrolls. The
+      extension hides the host page's `#sp_message_container_…` wrapper — check
+      in DevTools that it carries `display: none`, and that nothing else on the
+      page was hidden with it.
+- [ ] **If the modal is still there after 15 s:** suspect the `QUIET_MS` gap
+      rather than the frame-boundary fix. Sourcepoint reveals an
+      already-inserted container by toggling an inline style, which the
+      sweeper's observer does not watch, so it is only ever swept when some
+      unrelated DOM change happens to schedule one. Confirm by reloading a few
+      times and seeing whether it is intermittent, and record **how long after
+      load** the overlay appears — that number is wanted and cannot be got
+      anywhere but a real profile. A headless or preview browser suspends
+      rendering in a backgrounded tab, which makes the overlay measure 0x0
+      long after it is live. See the `QUIET_MS` entry in
+      [KNOWN-ISSUES.md](KNOWN-ISSUES.md).
+- [ ] **Test:** Repeat on one other iframe-hosted CMP whose origin is in
+      `CMP_FRAME_HOSTS` (`src/content/cosmetic.js`) — OneTrust
+      (`cdn.cookielaw.org`) or TrustArc (`consent.trustarc.com`).
+- [ ] **Test (negative):** open a checkout that uses a Stripe-hosted iframe
+      modal, or any site with a video lightbox served from a third party.
+      **Expect:** untouched. The origin allowlist is the only thing standing
+      between this pass and hiding those.
+
+---
+
 ---
 
 ## Section 5: Newsletter Modal Dismissal — CORRECTNESS CRITICAL

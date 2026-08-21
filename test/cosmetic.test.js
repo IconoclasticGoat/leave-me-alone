@@ -1,5 +1,6 @@
 // test/cosmetic.test.js
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { hideCookieBanners } from '../src/content/cosmetic.js';
 import { restoreScroll } from '../src/content/scroll.js';
@@ -124,6 +125,104 @@ describe('hideCookieBanners', () => {
         We use cookies on this site to improve your experience.</div>`);
       expect(hideCookieBanners(document)).toBe(0);
     });
+  });
+});
+
+describe('hideCookieBanners on a CMP served from an iframe', () => {
+  // The bbc.com/news shape, captured 2026-08-20. Sourcepoint splits the banner
+  // across a frame boundary: the host page keeps a bare fixed <div> whose only
+  // child is a cross-origin iframe, so it has no prose and no buttons for
+  // looksLikeBanner to read; the prose and the button live in the frame's own
+  // document, where the banner computes to `position: absolute` because the
+  // host's wrapper owns the fixed placement. Neither side is a banner by
+  // looksLikeBanner's reckoning, so an unhandled CMP survives both.
+  const HOST = 'https://cdn.privacy-mgmt.com/us_pm/index.html?is_usnat_notice=true';
+
+  it('hides the fixed wrapper around a CMP frame that carries no prose of its own', () => {
+    mount(`<div id="b" style="position:fixed;inset:0;z-index:2147483647">
+      <iframe id="f" src="${HOST}"></iframe></div>`);
+    expect(hideCookieBanners(document)).toBe(1);
+    expect(document.querySelector('#b').style.display).toBe('none');
+  });
+
+  it('hides the wrapper, not the frame — the overlay and the click blocker are the wrapper', () => {
+    // Hiding only the iframe would leave a full-screen fixed div swallowing
+    // every click on the page underneath.
+    mount(`<div id="b" style="position:fixed;inset:0">
+      <iframe id="f" src="${HOST}"></iframe></div>`);
+    hideCookieBanners(document);
+    expect(document.querySelector('#b').style.display).toBe('none');
+    expect(document.querySelector('#f').style.display).toBe('');
+  });
+
+  it('counts one wrapper once even when it holds several CMP frames', () => {
+    mount(`<div id="b" style="position:fixed;inset:0">
+      <iframe src="${HOST}"></iframe><iframe src="${HOST}&second=1"></iframe></div>`);
+    expect(hideCookieBanners(document)).toBe(1);
+  });
+
+  describe('single-condition guard isolation', () => {
+    it('ignores a frame whose origin is not a known CMP host', () => {
+      // Identical shape to the passing case — fixed wrapper, no prose, shown
+      // frame — so only the origin allowlist can produce 0 here. This is the
+      // guard that keeps a Stripe checkout or a video lightbox on the page.
+      mount(`<div id="b" style="position:fixed;inset:0">
+        <iframe id="f" src="https://checkout.stripe.com/pay/cs_test_123"></iframe></div>`);
+      expect(hideCookieBanners(document)).toBe(0);
+      expect(document.querySelector('#b').style.display).toBe('');
+    });
+
+    it('ignores a CMP frame with no fixed or sticky ancestor', () => {
+      // The origin is allowlisted and the wrapper has no prose, so only the
+      // fixed/sticky requirement can produce 0. An in-flow consent frame is
+      // covering nothing and needs no rescuing.
+      mount(`<div id="b"><iframe id="f" src="${HOST}"></iframe></div>`);
+      expect(hideCookieBanners(document)).toBe(0);
+    });
+
+    it('leaves a fixed wrapper that carries prose of its own alone', () => {
+      // Allowlisted origin, fixed wrapper — so only the empty-prose
+      // requirement can produce 0. Prose means the host page owns real
+      // content in this element, and hiding it would take that content too.
+      mount(`<div id="b" style="position:fixed;inset:0">
+        <p>Live coverage: markets open higher</p>
+        <iframe id="f" src="${HOST}"></iframe></div>`);
+      expect(hideCookieBanners(document)).toBe(0);
+    });
+
+    it('ignores a hidden CMP frame', () => {
+      // Allowlisted origin, fixed wrapper, no prose — so only the isShown
+      // check on the frame can produce 0. CMPs leave invisible utility
+      // frames on the page long after the banner is gone.
+      document.body.innerHTML = `<div id="b" style="position:fixed;inset:0">
+        <iframe id="f" src="${HOST}" style="display:none"></iframe></div>`;
+      for (const el of document.querySelectorAll('*')) {
+        el.getBoundingClientRect = () => ({ width: 600, height: 400 });
+      }
+      expect(hideCookieBanners(document)).toBe(0);
+    });
+  });
+});
+
+describe('the captured bbc.com/news banner', () => {
+  // Both halves of one real Sourcepoint US notice, captured 2026-08-20. The
+  // pair is the regression: the fix has to work on the host side, because
+  // there is nothing to be done from inside the frame.
+  it('hides the host page\'s overlay', () => {
+    mount(readFileSync('test/fixtures/sourcepoint-host-frame.html', 'utf8'));
+    expect(hideCookieBanners(document)).toBe(1);
+    expect(document.querySelector('#sp_message_container_1504881').style.display).toBe('none');
+    expect(document.querySelector('main').style.display).toBe('');
+  });
+
+  it('does nothing from inside the frame, where the banner is not fixed', () => {
+    // The same content script runs in the frame (all_frames: true) and sees
+    // the prose and the button — but the banner there computes to
+    // `position: absolute`, verified against the live page, because the
+    // host's wrapper owns the fixed placement. Hiding it there would leave
+    // the wrapper swallowing clicks anyway.
+    mount(readFileSync('test/fixtures/sourcepoint-usnat-frame.html', 'utf8'));
+    expect(hideCookieBanners(document)).toBe(0);
   });
 });
 
