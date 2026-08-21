@@ -1,0 +1,15 @@
+<!-- Captured 2026-08-21 from drsquatch.com: a hand-rolled privacy bar, no CMP
+     vendor behind it, so the cosmetic fallback is the only layer that can
+     reach it. Its accept control is an <a href="/#privacy-acknowledged"> — a
+     same-document fragment that dismisses the bar rather than navigating.
+     Every other anchor here is a real policy link with an off-site href. -->
+<div class="text-mono-lightest fixed bottom-0 z-1100 w-full bg-brand-green-darkest" style="position: fixed" data-privacy-banner="" role="region" aria-label="Privacy notice" aria-live="polite">
+  <div class="flex flex-col items-center gap-4 p-4 md:flex-row">
+    <div class="text-center text-2xs md:min-w-0 md:flex-1 md:text-left">
+      <p>Our website uses tracking technologies that are described in our Cookie Policy accessible <a class="underline" href="https://privacy.drsquatch.com/policies/en/?name=cookie-policy">here</a>. To manage these settings, visit <a class="underline" href="/#privacy" data-discover="true">Your Privacy Choices</a>. By continuing to browse our site, you agree to our <a class="underline" href="https://privacy.drsquatch.com/policies/en/?name=privacy-policy">Privacy Policy</a>, <a class="underline" href="https://privacy.drsquatch.com/policies/en/?name=cookie-policy">Cookie Policy</a>, and <a class="underline" href="https://privacy.drsquatch.com/policies/en/?name=terms-of-service">Terms of Use</a>.</p>
+    </div>
+    <div class="w-full shrink-0 md:w-32">
+      <a class="text-md border-brand-orange-medium bg-brand-orange-medium flex w-full justify-center rounded-lg border px-4 py-2 text-center font-semibold" aria-label="Acknowledge privacy notice and dismiss banner" href="/#privacy-acknowledged" data-discover="true">OK</a>
+    </div>
+  </div>
+</div>

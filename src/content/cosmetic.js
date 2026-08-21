@@ -57,6 +57,32 @@ function prose(el) {
   return (clone.textContent ?? '').toLowerCase();
 }
 
+// An <a> is navigation, not a control — unless it goes nowhere. A consent
+// "OK" that only sets a fragment dismisses the banner in place, while a policy
+// link leaves the page; that is the line, not the tag. Anchors with no href at
+// all stay excluded: sites use those for layout as often as for controls, and
+// no reported banner has needed them.
+function isInPageControl(a) {
+  const href = (a.getAttribute('href') ?? '').trim();
+  if (!href) return false;
+  if (/^javascript:/i.test(href)) return true;
+  try {
+    const base = a.ownerDocument.baseURI;
+    const to = new URL(href, base);
+    const here = new URL(base);
+    return to.origin === here.origin
+      && to.pathname === here.pathname
+      && to.search === here.search;
+  } catch {
+    return false; // an unparseable href is not something we act on
+  }
+}
+
+function acceptControls(el) {
+  return [...el.querySelectorAll('button, [role=button], a')]
+    .filter((c) => c.tagName !== 'A' || isInPageControl(c));
+}
+
 function looksLikeBanner(el) {
   if (!isShown(el)) return false;
   const style = el.ownerDocument.defaultView.getComputedStyle(el);
@@ -66,12 +92,10 @@ function looksLikeBanner(el) {
   if (text.length > 1200) return false; // whole-page wrapper, not a banner
 
   const mentionsCookies = COOKIE_WORDS.some((w) => prose(el).includes(w));
-  // Only real buttons (or role=button) count as an accept control. A nav
-  // bar's items and a footer's policy links are <a> tags, not buttons — a
-  // page's ordinary navigation must never be treated as a consent action.
-  const hasButton = [...el.querySelectorAll('button, [role=button]')].some((b) =>
-    matchesAcceptWord(b.textContent)
-  );
+  // A nav bar's items and a footer's policy links must never read as a consent
+  // action, which is what acceptControls() filters out — by where an anchor
+  // goes rather than by its tag.
+  const hasButton = acceptControls(el).some((b) => matchesAcceptWord(b.textContent));
   return mentionsCookies && hasButton;
 }
 

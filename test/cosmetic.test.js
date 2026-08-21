@@ -204,6 +204,56 @@ describe('hideCookieBanners on a CMP served from an iframe', () => {
   });
 });
 
+describe('banners whose accept control is an anchor', () => {
+  // drsquatch.com, captured 2026-08-21. No CMP vendor behind it, so the
+  // cosmetic fallback is the only layer that can reach it — and its "OK" is an
+  // <a href="/#privacy-acknowledged">, a same-document fragment that dismisses
+  // the bar in place. Requiring a <button> missed it entirely.
+  it('hides the captured drsquatch.com privacy bar', () => {
+    mount(readFileSync('test/fixtures/drsquatch-privacy-bar.html', 'utf8'));
+    expect(hideCookieBanners(document)).toBe(1);
+    expect(document.querySelector('[data-privacy-banner]').style.display).toBe('none');
+  });
+
+  it('counts an anchor that only sets a fragment as an accept control', () => {
+    mount(`<div id="b" style="position:fixed">We use cookies.
+      <a href="#accepted">OK</a></div>`);
+    expect(hideCookieBanners(document)).toBe(1);
+  });
+
+  it('counts an anchor with a javascript: href', () => {
+    mount(`<div id="b" style="position:fixed">We use cookies.
+      <a href="javascript:void(0)">Accept</a></div>`);
+    expect(hideCookieBanners(document)).toBe(1);
+  });
+
+  describe('single-condition guard isolation', () => {
+    it('does not count an anchor that navigates somewhere else', () => {
+      // Isolates the same-document test. Identical shape to the passing case
+      // — fixed, cookie prose, accept word — so only the href can produce 0.
+      // This is what keeps a footer's policy links from reading as consent.
+      mount(`<div id="b" style="position:fixed">We use cookies.
+        <a href="https://example.com/policy">Accept</a></div>`);
+      expect(hideCookieBanners(document)).toBe(0);
+    });
+
+    it('does not count an anchor to the same path on a different origin', () => {
+      // Isolates the origin test specifically. jsdom serves these at
+      // http://localhost:3000/, so this href matches on pathname and search
+      // and differs only in origin — nothing else here can produce 0.
+      mount(`<div id="b" style="position:fixed">We use cookies.
+        <a href="https://consent-partner.example/">OK</a></div>`);
+      expect(hideCookieBanners(document)).toBe(0);
+    });
+
+    it('does not count an anchor pointing at another path on the same site', () => {
+      mount(`<div id="b" style="position:fixed">We use cookies.
+        <a href="/legal/cookies">OK</a></div>`);
+      expect(hideCookieBanners(document)).toBe(0);
+    });
+  });
+});
+
 describe('the captured bbc.com/news banner', () => {
   // Both halves of one real Sourcepoint US notice, captured 2026-08-20. The
   // pair is the regression: the fix has to work on the host side, because

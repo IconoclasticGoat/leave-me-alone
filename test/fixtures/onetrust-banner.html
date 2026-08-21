@@ -1,0 +1,32 @@
+<!-- Captured 2026-08-21 from brooklinen.com: a plain OneTrust banner, no
+     preference centre in the DOM (`.otPcCenter` is absent entirely). The
+     `onetrust` rule's presentMatcher asks for a banner that does NOT contain
+     `.otPcCenter` — `childFilterNegate: true` — so this is precisely the shape
+     it is meant to claim. Wrapper included because the rule's HIDE_CMP hides
+     `#onetrust-consent-sdk`, not the banner. -->
+<div id="onetrust-consent-sdk">
+  <div id="onetrust-banner-sdk" class="otFlat bottom ot-wo-title vertical-align-content" tabindex="0" role="region" aria-label="Cookie banner" style="position: fixed; bottom: 0px;">
+    <div role="dialog" aria-label="Privacy">
+      <div class="ot-sdk-container">
+        <div class="ot-sdk-row">
+          <div id="onetrust-group-container" class="ot-sdk-eight ot-sdk-columns">
+            <div class="banner_logo"></div>
+            <div id="onetrust-policy">
+              <div id="onetrust-policy-text">We use cookies to make your browsing experience feel as smooth and comfortable as our sheets. By continuing, you agree to our use of cookies. You can adjust your preferences anytime. Further information is available in our <a class="ot-cookie-policy-link" href="https://www.brooklinen.com/pages/privacy" rel="noopener" target="_blank">Cookie Policy</a></div>
+            </div>
+          </div>
+          <div id="onetrust-button-group-parent" class="ot-sdk-three ot-sdk-columns has-reject-all-button">
+            <div id="onetrust-button-group">
+              <button id="onetrust-pc-btn-handler" aria-label="Manage Preferences, Opens the preference center dialog">Manage Preferences</button>
+              <button id="onetrust-reject-all-handler">Reject All</button>
+              <button id="onetrust-accept-btn-handler">Accept Cookies</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="onetrust-close-btn-container">
+        <button class="onetrust-close-btn-handler onetrust-close-btn-ui banner-close-button ot-close-icon" aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+</div>
