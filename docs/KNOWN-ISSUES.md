@@ -46,6 +46,14 @@ batching if that list grew into the hundreds.
 
 **The cosmetic fallback misses banners whose only cookie wording sits in a link.** To stop it hiding ordinary page furniture, cookie-word matching is scoped to element prose and excludes `<a>`/`<button>` label text. A banner phrased "By continuing to browse you agree to our [Cookie Policy]" with an Accept button is therefore missed. This is the safe direction — under-hiding never breaks a page — but it is a real gap, not a theoretical one.
 
+**An accept control that is an `<a>` with no `href` is not recognised.** The
+fallback counts an anchor as a control when it resolves to the same document or
+carries a `javascript:` href, which is what reaches drsquatch.com's "OK". A
+bare `<a>Accept</a>` with no `href` is still ignored: sites use those for
+layout as often as for controls, and treating them as consent actions would
+reopen the nav-bar false positives the tag restriction was added to prevent. No
+reported banner has needed it yet.
+
 **The iframe pass in the cosmetic fallback runs off a hand-written origin
 allowlist.** `CMP_FRAME_HOSTS` in `src/content/cosmetic.js` names thirteen
 consent-frame origins, and now governs which frames `start()` attaches a
@@ -155,21 +163,13 @@ measurement of the harness — only the *ordering* above survives that. See
 ## Correctness details
 
 - `cmp.js` `isPresent`/`isShowing` OR across all detector entries rather than requiring both within one entry. Affects 4 of 202 rules; a false positive falls through to the cosmetic fallback rather than breaking anything.
-- **13 of 202 rules report success while doing nothing.** `ORDER` in `cmp.js`
-  runs `OPEN_OPTIONS`, `DO_CONSENT`, `SAVE_CONSENT`, `HIDE_CMP`. Thirteen
-  vendored rules — `sourcepoint`, `sourcepointpopup`, `onetrust_banner`,
-  `trustarcbar`, `google_eomdialog`, `google_consentdomain_1`,
-  `hampshire.policeopen`, `koboopen`, `linkedin_popup`, `nordpoolgroupopen`,
-  `opensuchenmobile.de`, `paypal_banner`, `thenextwebopen` — carry no
-  actionable method in that list; their real work is a `UTILITY` method that
-  opens the dialog a *second* rule then handles. `cmp.run()` skips every
-  method, throws nothing, and `runEngine` returns `{ handled: <name>, reason:
-  'ok' }`. The sweeper sets `state.handled = true` on that, which suppresses
-  both further engine passes **and** the cosmetic fallback for the rest of the
-  page's life. Severity is limited by ordering — `onetrust` is evaluated
-  before `onetrust_banner`, so the working rule usually wins first — but the
-  failure mode is silent and total when it does bite. A rule with no
-  actionable method should report `handled: null`.
+- **`queryAll` silently ignores `iframeFilter`.** It appears on 9 targets
+  across the bundle and is dropped, so those selectors match against the
+  current document rather than searching into a frame. Unlike
+  `childFilterNegate` this only widens a match rather than inverting it, and
+  honouring it properly is bounded by the same-origin policy — a cross-origin
+  consent frame cannot be queried from the host at all, which is why the
+  cosmetic fallback handles those from the outside instead.
 - The `Promise.race` timeout in `runEngine` never clears its `setTimeout`, leaving one ~8 s timer per matched CMP per page load.
 - `state.handled` never resets, so SPA route changes get no second pass.
 - `createSweeper`'s `start()` is non-reentrant; `stop()` before `start()` is a silent no-op.
