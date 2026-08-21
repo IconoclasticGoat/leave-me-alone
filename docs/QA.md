@@ -15,6 +15,7 @@ The `chrome.contentSettings` layer — which enforces the actual browser-level p
 ## Setup
 
 Before running any item below:
+
 - Build the extension: `npm install && npm run build`
 - Load unpacked from `dist/` via `chrome://extensions` with Developer mode on
 - Ensure all toggles in the popup are visible and functional
@@ -28,13 +29,13 @@ These tests verify that toggling the extension's controls correctly updates the 
 
 ### Item 1: Notifications setting
 
-- [ ] **Test:** Load unpacked from `dist/`. Navigate to `chrome://settings/content/notifications`. Before opening the popup, confirm the setting shows "Don't allow sites to send notifications."
-- [ ] **Expected result:** The setting is already restricted because the extension sets it on load with the default toggle state.
+- [x] **Test:** Load unpacked from `dist/`. Navigate to `chrome://settings/content/notifications`. Before opening the popup, confirm the setting shows "Don't allow sites to send notifications."
+- [x] **Expected result:** The setting is already restricted because the extension sets it on load with the default toggle state.
 
 ### Item 2: Notifications toggle
 
-- [ ] **Test:** Open the extension popup with notifications **on** (the default). Reload `chrome://settings/content/notifications` and read the state. Then toggle notifications **off** in the popup and reload the settings page again.
-- [ ] **Expected result:**
+- [x] **Test:** Open the extension popup with notifications **on** (the default). Reload `chrome://settings/content/notifications` and read the state. Then toggle notifications **off** in the popup and reload the settings page again.
+- [x] **Expected result:**
   - Toggle **on**: the page reads "Don't allow sites to send notifications" and carries Chrome's "controlled by an extension" banner. The extension writes `block`.
   - Toggle **off**: the banner is gone and there is no extension-controlled entry at all. Whatever the user had chosen in their own Chrome settings is back in force.
   - Off does **not** mean "Allow sites to send notifications". Off means the extension stops writing anything for this type — it never grants a permission on the user's behalf. See Item 9b, which checks this from the other direction.
@@ -61,19 +62,19 @@ setting is safe to ship on by default. It is currently off by default pending
 this result.
 
 - [ ] **Test:** On Chrome 141 or later, turn "Block autoplaying sound" on. Open
-  a video site (YouTube is the case that matters). Let a video load without
-  touching it, then press play yourself and unmute if needed.
+      a video site (YouTube is the case that matters). Let a video load without
+      touching it, then press play yourself and unmute if needed.
 - [ ] **Expected result, if the label is accurate:** the video does not start
-  playing sound on its own, but pressing play produces sound normally.
+      playing sound on its own, but pressing play produces sound normally.
 - [ ] **Expected result, if the setting is a full mute:** the tab shows Chrome's
-  muted indicator and pressing play produces no sound at all.
+      muted indicator and pressing play produces no sound at all.
 - [ ] **If it is a full mute:** the toggle must keep its off-by-default state,
-  and its label needs to change to say so, to "Mute sites" or similar. Update the
-  bullet in `docs/STORE-LISTING.md` to match, and drop the note in
-  `src/settings.js` that points here.
+      and its label needs to change to say so, to "Mute sites" or similar. Update the
+      bullet in `docs/STORE-LISTING.md` to match, and drop the note in
+      `src/settings.js` that points here.
 - [ ] **If only automatic playback is suppressed:** the label is accurate and
-  the toggle can move back to on-by-default. Moving it means moving its row in
-  `TOGGLE_GROUPS.more` too, which `test/popup.test.js` enforces.
+      the toggle can move back to on-by-default. Moving it means moving its row in
+      `TOGGLE_GROUPS.more` too, which `test/popup.test.js` enforces.
 
 ---
 
@@ -211,14 +212,14 @@ snapshot of one site on one day.
       `chrome://extensions` → Errors, and confirm blocking still works on an
       ordinary site.
       **Expect:** no `updateDynamicRules` error. This is the one bare-IP path
-      that is *not* covered by the unit tests — `excludedRequestDomains` is
+      that is _not_ covered by the unit tests — `excludedRequestDomains` is
       only ever exercised against a stub, and Chrome fails that call
       atomically, which would freeze the previous dynamic rules in place.
 
 ### Item 9b: A toggle that is off leaves no extension-controlled setting
 
 The failure this catches: writing a release value at `<all_urls>` when a
-toggle is off puts the extension's preference *above* the user's own, and for
+toggle is off puts the extension's preference _above_ the user's own, and for
 cookies and popups that value is `allow`. A default install would then
 force-allow cookies browser-wide. Nothing but this check surfaces it.
 
@@ -231,7 +232,7 @@ force-allow cookies browser-wide. Nothing but this check surfaces it.
       Then turn "Block popups & automatic downloads" **off** in the popup and
       reload the settings page. **Expect:** Chrome's own default (block) is
       still in force and no extension banner appears. The extension must never
-      make popups *more* permitted than Chrome's default.
+      make popups _more_ permitted than Chrome's default.
 - [ ] **Test:** Turn a toggle on, confirm the extension banner appears on the
       matching `chrome://settings/content/...` page, then turn it off again.
       **Expect:** the banner disappears and the setting returns to whatever
