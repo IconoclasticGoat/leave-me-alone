@@ -1,0 +1,11 @@
+title: Leave Me Alone
+description: Necessary cookies only. No notification prompts, no location requests, no newsletter popups.
+theme: jekyll-theme-minimal
+
+# Internal working documents. They stay in the repository — the listing invites
+# people to read every line — but they are not pages of the site.
+exclude:
+  - superpowers
+  - QA.md
+  - KNOWN-ISSUES.md
+  - STORE-LISTING.md

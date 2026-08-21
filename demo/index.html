@@ -1,0 +1,170 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo page — Leave Me Alone</title>
+<!--
+  A demo page for the extension, and the backdrop for the Chrome Web Store
+  screenshots. Everything here is ours: no third-party site is reproduced.
+
+  The two interruptions below are built to the same shape the real heuristics
+  look for, so the extension acts on them through its ordinary code path
+  rather than anything staged for the picture:
+
+  - The cookie bar is `position: fixed`, keeps its prose under the 1200-char
+    ceiling, says "cookies" in text that is not inside a link or a button
+    (`prose()` strips those), and offers a <button> whose label matches an
+    accept word. That is exactly what `looksLikeBanner()` requires.
+  - The newsletter modal is `position: fixed` with `z-index >= 100`, holds one
+    visible input, that input is `type=email`, and it says "newsletter" and
+    "first order". It carries none of AUTH_MARKERS — no "sign in", no "create
+    account", no "register" — because any one of those is a hard refusal, and
+    a demo that tripped one would prove the opposite of what it is here to show.
+
+  Keep those constraints in mind before editing the copy: rewording this is
+  enough to make the page stop being handled. test/demo-page.test.js asserts
+  both still match.
+-->
+<style>
+  :root { color-scheme: light; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0; color: #1a1a1c; background: #fff; line-height: 1.6;
+  }
+  header {
+    border-bottom: 1px solid #e5e5e8; padding: 1rem 2rem;
+    display: flex; align-items: baseline; gap: .75rem;
+  }
+  header strong { font-size: 1.05rem; letter-spacing: -.01em; }
+  header span { color: #6b6b74; font-size: .8rem; }
+  main { max-width: 42rem; margin: 0 auto; padding: 2.5rem 2rem 6rem; }
+  h1 { font-size: 2rem; line-height: 1.2; letter-spacing: -.02em; margin: 0 0 .5rem; }
+  .meta { color: #6b6b74; font-size: .85rem; margin-bottom: 2rem; }
+  p { margin: 0 0 1.1rem; }
+  .fig { background: #f3f3f6; border-radius: 8px; height: 190px; margin: 1.75rem 0; }
+
+  /* Cookie bar */
+  #cookie-bar {
+    position: fixed; inset: auto 0 0 0; z-index: 900;
+    background: #17171a; color: #fff; padding: 1.1rem 1.5rem;
+    display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap;
+    box-shadow: 0 -4px 24px rgba(0,0,0,.18);
+  }
+  #cookie-bar p { margin: 0; flex: 1 1 22rem; font-size: .875rem; color: #e7e7ea; }
+  #cookie-bar a { color: #fff; }
+  #cookie-bar .actions { display: flex; gap: .6rem; }
+  #cookie-bar button {
+    font: inherit; font-size: .85rem; padding: .55rem 1.1rem;
+    border-radius: 4px; cursor: pointer; border: 1px solid #55555e;
+    background: transparent; color: #fff;
+  }
+  #cookie-bar button.primary { background: #fff; color: #17171a; border-color: #fff; font-weight: 600; }
+
+  /* Newsletter modal */
+  #newsletter-backdrop {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(12,12,16,.55); display: grid; place-items: center;
+  }
+  #newsletter {
+    /* Centred explicitly. It is a sibling of the backdrop rather than a child,
+       so the backdrop's place-items does not reach it, and a fixed element
+       with no offsets just stays where it fell in flow — off the bottom of
+       the page, which is where this modal spent its first draft. */
+    position: fixed; z-index: 1001; top: 50%; left: 50%; translate: -50% -50%;
+    width: min(26rem, calc(100vw - 3rem));
+    background: #fff; border-radius: 10px; padding: 2rem;
+    box-shadow: 0 24px 60px rgba(0,0,0,.3); text-align: center;
+  }
+  #newsletter h2 { margin: 0 0 .5rem; font-size: 1.35rem; letter-spacing: -.01em; }
+  #newsletter p { color: #55555e; font-size: .9rem; }
+  #newsletter input {
+    font: inherit; width: 100%; box-sizing: border-box;
+    padding: .65rem .8rem; border: 1px solid #ccccd4; border-radius: 6px;
+  }
+  #newsletter .go {
+    font: inherit; font-weight: 600; width: 100%; margin-top: .6rem;
+    padding: .7rem; border: 0; border-radius: 6px;
+    background: #5b60d6; color: #fff; cursor: pointer;
+  }
+  #newsletter .close {
+    position: absolute; top: .5rem; right: .7rem;
+    background: none; border: 0; font-size: 1.5rem; line-height: 1;
+    color: #8a8a94; cursor: pointer;
+  }
+</style>
+
+<header><strong>Demo page</strong> <span>a stand-in site</span></header>
+
+<main>
+  <h1>Two interruptions, and what the extension does with them</h1>
+  <div class="meta">Sample article · 4 min read</div>
+  <p>This page exists so the extension has something to act on that belongs to
+     nobody. It carries the two interruptions people meet most often: a consent
+     bar pinned to the bottom of the window, and a mailing-list modal over the
+     middle of it.</p>
+  <div class="fig"></div>
+  <p>Neither is a picture of a banner. Both are built to the shape the
+     extension's own heuristics look for, so what you see happen to them is the
+     shipping code doing its ordinary job.</p>
+  <p>With the extension off, both sit there until you deal with them. With it
+     on, the consent bar is answered and the modal is dismissed before the page
+     has finished settling, and the scroll lock the modal installed is lifted.</p>
+</main>
+
+<div id="cookie-bar">
+  <p>We use cookies and similar technologies to personalise content, measure
+     performance and improve your experience. Some are necessary; the rest are
+     set only with your permission. Read our <a href="#cookie-policy">Cookie Policy</a>.</p>
+  <div class="actions">
+    <button type="button">Reject non-essential</button>
+    <button type="button" class="primary">Accept all cookies</button>
+  </div>
+</div>
+
+<div id="newsletter-backdrop"></div>
+<div id="newsletter">
+  <button class="close" type="button" aria-label="Close">&times;</button>
+  <h2>Join our newsletter</h2>
+  <p>New arrivals and subscriber-only offers &mdash; plus 10% off your first order.</p>
+  <input type="email" placeholder="you@example.com" aria-label="Email address">
+  <button class="go" type="button">Subscribe</button>
+</div>
+
+<script>
+  // The behaviour a real page would have. Without it the demo misrepresents
+  // the extension in the unflattering direction: dismissNewsletter() prefers
+  // clicking a close control over hiding the element, so against an inert
+  // button it reports "clicked-close" and the modal just sits there. A real
+  // site's close button closes.
+  //
+  // The scroll lock is here for the same reason. Modals lock the page and
+  // routinely forget to unlock it; restoreScroll() exists to clean that up,
+  // and it has nothing to clean up unless the demo actually locks.
+  // ?only=cookies / ?only=newsletter shows one interruption at a time. Both
+  // show by default. Useful when you want to watch a single heuristic work,
+  // and it is how the store screenshots isolate each one — the newsletter
+  // backdrop otherwise dims the cookie bar in every shot.
+  const only = new URLSearchParams(location.search).get('only');
+  if (only === 'cookies') {
+    for (const id of ['newsletter', 'newsletter-backdrop']) {
+      document.getElementById(id).remove();
+    }
+  } else if (only === 'newsletter') {
+    document.getElementById('cookie-bar').remove();
+  }
+
+  if (document.getElementById('newsletter')) document.body.style.overflow = 'hidden';
+
+  function closeNewsletter() {
+    for (const id of ['newsletter', 'newsletter-backdrop']) {
+      document.getElementById(id)?.style.setProperty('display', 'none');
+    }
+    document.body.style.overflow = '';
+  }
+  document.querySelector('#newsletter .close')?.addEventListener('click', closeNewsletter);
+
+  for (const b of document.querySelectorAll('#cookie-bar button')) {
+    b.addEventListener('click', () => {
+      document.getElementById('cookie-bar').style.display = 'none';
+    });
+  }
+</script>

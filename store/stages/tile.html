@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="stage.css">
+<style>
+  html, body { width: 440px; height: 280px; }
+  /* Half-size is the test for a promo tile, so this carries three elements and
+     no more: mark, name, one claim. */
+  .wrap { position: absolute; inset: 0; display: grid; align-content: center;
+          justify-items: center; text-align: center; gap: 2px; z-index: 3; }
+  img { width: 56px; height: 56px; margin-bottom: 12px; }
+  h1 { font-size: 42px; line-height: 1; margin: 0; }
+  p { margin: 12px 0 0; font-size: 14px; color: var(--ink-soft); letter-spacing: .01em; }
+  .rule { width: 44px; height: 2px; background: var(--accent); margin-top: 16px; }
+</style>
+<div class="wrap">
+  <img src="/ext/icons/active-128.png" alt="">
+  <h1>Leave Me Alone</h1>
+  <p>Necessary cookies only. No prompts. No popups.</p>
+  <div class="rule"></div>
+</div>

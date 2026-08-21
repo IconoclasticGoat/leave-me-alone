@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="stage.css">
+<style>
+  .copy { position: absolute; left: 742px; top: 244px; width: 458px; z-index: 3; }
+  h1 { font-size: 50px; line-height: 1.04; }
+  .sub { max-width: 34ch; }
+  .window { position: absolute; left: 40px; top: 74px; width: 648px; height: 652px;
+            border-radius: 0 10px 10px 0; }
+  .window iframe { width: 648px; height: 652px; }
+  .popup-shell { position: absolute; left: 206px; top: 110px; width: 324px; height: 578px; z-index: 4; }
+  .popup-shell iframe { width: 324px; height: 578px; }
+</style>
+
+<!-- Deliberately the untouched demo page: a paused site is one the extension
+     is not acting on, so the consent bar being back is the honest picture. -->
+<div class="window">
+  <iframe src="/demo/index.html?only=cookies" scrolling="no"></iframe>
+</div>
+
+<div class="popup-shell">
+  <iframe src="/ext/popup/harness.html?paused=1&host=example.com" scrolling="no"></iframe>
+</div>
+
+<div class="copy">
+  <div class="eyebrow">One site giving you trouble?</div>
+  <h1>Pause it there.<br>Leave it everywhere else.</h1>
+  <p class="sub">One site behaves normally again &mdash; banners, prompts and all &mdash;
+     while every other site stays exactly as you set it. The toolbar icon tells you
+     which mode you&rsquo;re in at a glance.</p>
+</div>

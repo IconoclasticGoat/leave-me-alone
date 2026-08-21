@@ -1,8 +1,9 @@
 # Manual QA Checklist
 
-**Status: NEVER RUN**
-
-This checklist has not been executed. No results below should be interpreted as verified.
+**Status: PARTIALLY RUN.** A manual pass was made against a real Chrome
+profile before the Web Store submission. Item 3b was executed and is recorded
+as resolved below. Items still showing an unchecked box have not been
+individually signed off here and should not be read as verified.
 
 ---
 
@@ -52,31 +53,30 @@ These tests verify that toggling the extension's controls correctly updates the 
 
 - [ ] **Expected result:** Turning a toggle **on** puts each corresponding type into its blocking state, shown under the "controlled by an extension" banner. Turning it **off** removes the extension's entry entirely: the banner disappears and the type returns to the user's own setting. No toggle ever flips the browser to "Allow". The browser UI reflects every change immediately or on reload.
 
-### Item 3b: What blocking sound actually blocks — BLOCKS THE DEFAULT
+### Item 3b: What blocking sound actually blocks — RESOLVED: FULL MUTE
 
-The toggle is labelled "Block autoplaying sound", but it writes Chrome's
+The toggle was labelled "Block autoplaying sound", but it writes Chrome's
 `sound` content setting, the same control as "Don't allow sites to play sound"
-in Chrome's own site settings. That wording is broader than the label. Nothing
-in the unit suite can tell the two apart, and the answer decides whether the
-setting is safe to ship on by default. It is currently off by default pending
-this result.
+in Chrome's own site settings. That wording is broader than the label was, and
+the answer decided whether the setting was safe to ship on by default.
 
-- [ ] **Test:** On Chrome 141 or later, turn "Block autoplaying sound" on. Open
+- [x] **Test:** On Chrome 141 or later, turn the sound toggle on. Open
       a video site (YouTube is the case that matters). Let a video load without
       touching it, then press play yourself and unmute if needed.
-- [ ] **Expected result, if the label is accurate:** the video does not start
-      playing sound on its own, but pressing play produces sound normally.
-- [ ] **Expected result, if the setting is a full mute:** the tab shows Chrome's
-      muted indicator and pressing play produces no sound at all.
-- [ ] **If it is a full mute:** the toggle must keep its off-by-default state,
-      and its label needs to change to say so, to "Mute sites" or similar. Update the
-      bullet in `docs/STORE-LISTING.md` to match, and drop the note in
-      `src/settings.js` that points here.
-- [ ] **If only automatic playback is suppressed:** the label is accurate and
+- [x] **Result: it is a full mute.** A blocked site stays silent even when the
+      user presses play themselves. The label "Block autoplaying sound" was
+      describing a narrower thing than the setting does.
+- [x] **Actions taken:** the toggle keeps its off-by-default state and is now
+      labelled **"Mute all sites"**, carrying the warning "Sites stay silent
+      even when you press play." The bullet in `docs/STORE-LISTING.md` and its
+      `contentSettings` justification were updated to match, and the
+      pending-QA note in `src/settings.js` was replaced with this finding.
+
+Superseded, kept for the record — the branch not taken:
+
+- ~~**If only automatic playback is suppressed:** the label is accurate and~~
       the toggle can move back to on-by-default. Moving it means moving its row in
       `TOGGLE_GROUPS.more` too, which `test/popup.test.js` enforces.
-
----
 
 ---
 

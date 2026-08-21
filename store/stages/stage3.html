@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="stage.css">
+<style>
+  .head { position: absolute; left: 80px; top: 62px; width: 1120px; z-index: 3; }
+  h1 { font-size: 44px; line-height: 1.05; margin: 10px 0 0; }
+  .sub { max-width: 62ch; font-size: 16px; }
+  .pane { position: absolute; top: 274px; width: 548px; height: 452px; }
+  .pane iframe { width: 548px; height: 452px; }
+  #before { left: 80px; }
+  #after  { left: 652px; }
+</style>
+
+<div class="head">
+  <div class="eyebrow">Dismiss newsletter popups</div>
+  <h1>Mailing-list popups, closed on the way in.</h1>
+  <p class="sub">It acts only on an overlay that is collecting an address &mdash; an email
+     signup, or a phone field carrying SMS consent copy. Dismissed the way you would,
+     with its own close button, and the scroll lock it leaves behind is lifted too.
+     Sign-in, registration and checkout overlays are refused outright.</p>
+</div>
+
+<div class="window pane" id="before">
+  <div class="tag">Without the extension</div>
+  <iframe src="/demo/index.html?only=newsletter" scrolling="no"></iframe>
+</div>
+
+<div class="window pane" id="after">
+  <div class="tag good">With Leave Me Alone</div>
+  <iframe src="/demo/after.html?only=newsletter" scrolling="no"></iframe>
+</div>

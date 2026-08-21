@@ -9,13 +9,12 @@ export const DEFAULTS = {
   popupsDownloads: true,
   cameraMic: true,
   // more, off by default
-  // autoplaySound blocks Chrome's `sound` content setting, which is the same
-  // control as "Don't allow sites to play sound" in Chrome's own site
-  // settings. That wording is broader than this toggle's label, and whether a
-  // blocked site stays silent even when the user presses play is unconfirmed
-  // against a real browser. On by default, the bad case is a silent YouTube
-  // out of the box, which is not a default worth defaulting to on a guess.
-  // See the sound item in docs/QA.md; revisit this once it is answered.
+  // autoplaySound writes Chrome's `sound` content setting. Manual QA settled
+  // what that actually does: it is a full mute, not autoplay suppression — a
+  // blocked site stays silent even when the user presses play themselves. The
+  // toggle is therefore labelled "Mute all sites" and carries a warning, and
+  // it stays off by default: a silent YouTube out of the box is not a default
+  // worth shipping. See Item 3b in docs/QA.md.
   autoplaySound: false,
   chatWidgets: false,
   googleOneTap: false,
