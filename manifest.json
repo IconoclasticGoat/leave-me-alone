@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Leave Me Alone",
   "version": "1.0.0",
-  "description": "Necessary cookies only, no notification prompts, no location requests, no newsletter popups.",
+  "description": "Necessary cookies only. No notification prompts, no location requests, no newsletter popups. On every site, automatically.",
   "permissions": ["storage", "contentSettings", "declarativeNetRequestWithHostAccess"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
