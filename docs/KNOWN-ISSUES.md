@@ -113,11 +113,63 @@ three rules keep working. One fewer warning, no functional change.
 
 **Every sweep evaluates all 202 rules' detectors** — 207 detectors, 409 selectors, re-run on each debounced mutation for the observer's lifetime, in every frame, until a CMP is handled. A cheap first-pass filter (a combined selector, or sniffing for `__tcfapi` / `OneTrust` / `Cookiebot` globals) before the per-rule loop would cut most of it.
 
-**`QUIET_MS` is a fixed lifetime, not a quiet period.** The observer disconnects 10 s after `document_idle` regardless of page activity, so late-injecting CMPs — OneTrust and Sourcepoint routinely wait on a network round trip — are never seen. Either reset the timer on each mutation or rename the constant and raise it.
+**Sweep scheduling no longer watches only mutations, but still watches only
+some of them.** `start()` used to disconnect 10 s after `document_idle`
+regardless of page activity, debounce with no max-wait, and clear its own
+pending sweep on the way out. All three are fixed: the deadline is now a quiet
+period reset by each mutation (capped by `MAX_LIFE_MS`), the debounce is
+bounded by `MAX_WAIT_MS`, and `stop()` runs an outstanding sweep instead of
+discarding it.
+
+What made the `bbc.com/news` case reachable was none of those. By
+`document_idle` the Sourcepoint container and its iframe are already in the
+DOM and already `display: block`; the reveal comes later and produces **no
+mutation record in this document at all**. `start()` now attaches a
+`ResizeObserver` and a `load` listener to each allowlisted consent frame,
+because layout is the one thing that must happen for an overlay to become
+visible. Verified in a browser: the `ResizeObserver` fired 9 ms after the
+overlay appeared and 76 ms *before* the first mutation record of any kind —
+the `load` event never fired at all, the frame having loaded before the
+listener was attached.
+
+What is still missing:
+
+- **In-page CMPs revealed by a class or style toggle.** The observer watches
+  `{ childList: true, subtree: true }` on `root.body` and no `attributes`, so
+  a banner that is inserted early and un-hidden later is caught only if some
+  unrelated childList mutation happens to schedule a sweep. Adding
+  `attributes: true` is the general fix and was deliberately deferred: class
+  mutations fire constantly on a React site, and with a bounded debounce that
+  is roughly a sweep per second, each evaluating all 202 rules and 207
+  detectors. It needs the cheap pre-filter under **Performance** first.
+- **Head insertions.** The observer roots at `root.body`, so a `<style>` or
+  `<script>` appended to `<head>` raises nothing. Rooting at
+  `documentElement` would cost little.
+
+Absolute timing still needs a real Chrome profile. Headless and preview
+browsers suspend rendering in a backgrounded tab, which makes a CMP overlay
+read as 0x0 long after it is live and turns any latency measurement into a
+measurement of the harness — only the *ordering* above survives that. See
+[QA.md](QA.md) Item 6b.
 
 ## Correctness details
 
 - `cmp.js` `isPresent`/`isShowing` OR across all detector entries rather than requiring both within one entry. Affects 4 of 202 rules; a false positive falls through to the cosmetic fallback rather than breaking anything.
+- **13 of 202 rules report success while doing nothing.** `ORDER` in `cmp.js`
+  runs `OPEN_OPTIONS`, `DO_CONSENT`, `SAVE_CONSENT`, `HIDE_CMP`. Thirteen
+  vendored rules — `sourcepoint`, `sourcepointpopup`, `onetrust_banner`,
+  `trustarcbar`, `google_eomdialog`, `google_consentdomain_1`,
+  `hampshire.policeopen`, `koboopen`, `linkedin_popup`, `nordpoolgroupopen`,
+  `opensuchenmobile.de`, `paypal_banner`, `thenextwebopen` — carry no
+  actionable method in that list; their real work is a `UTILITY` method that
+  opens the dialog a *second* rule then handles. `cmp.run()` skips every
+  method, throws nothing, and `runEngine` returns `{ handled: <name>, reason:
+  'ok' }`. The sweeper sets `state.handled = true` on that, which suppresses
+  both further engine passes **and** the cosmetic fallback for the rest of the
+  page's life. Severity is limited by ordering — `onetrust` is evaluated
+  before `onetrust_banner`, so the working rule usually wins first — but the
+  failure mode is silent and total when it does bite. A rule with no
+  actionable method should report `handled: null`.
 - The `Promise.race` timeout in `runEngine` never clears its `setTimeout`, leaving one ~8 s timer per matched CMP per page load.
 - `state.handled` never resets, so SPA route changes get no second pass.
 - `createSweeper`'s `start()` is non-reentrant; `stop()` before `start()` is a silent no-op.
@@ -147,18 +199,3 @@ three rules keep working. One fewer warning, no functional change.
 Reviews caught the same failure six times: a test asserting exactly the right thing while proving nothing, because its fixture tripped an unrelated condition before reaching the behaviour under test. The cause is structural — this code is a stack of veto guards, and **veto guards mask each other by construction**, so a fixture aimed at one usually fails another first.
 
 A passing test is therefore not evidence that a guard is protected. The reliable check is mutation: delete the guard, run the focused test file, confirm it goes red. That takes about two seconds and found eleven unprotected guards across this branch. Treat it as the merge gate for any change to `src/content/` or `src/engine/`.
-- **13 of 202 rules report success while doing nothing.** `ORDER` in `cmp.js`
-  runs `OPEN_OPTIONS`, `DO_CONSENT`, `SAVE_CONSENT`, `HIDE_CMP`. Thirteen
-  vendored rules — `sourcepoint`, `sourcepointpopup`, `onetrust_banner`,
-  `trustarcbar`, `google_eomdialog`, `google_consentdomain_1`,
-  `hampshire.policeopen`, `koboopen`, `linkedin_popup`, `nordpoolgroupopen`,
-  `opensuchenmobile.de`, `paypal_banner`, `thenextwebopen` — carry no
-  actionable method in that list; their real work is a `UTILITY` method that
-  opens the dialog a *second* rule then handles. `cmp.run()` skips every
-  method, throws nothing, and `runEngine` returns `{ handled: <name>, reason:
-  'ok' }`. The sweeper sets `state.handled = true` on that, which suppresses
-  both further engine passes **and** the cosmetic fallback for the rest of the
-  page's life. Severity is limited by ordering — `onetrust` is evaluated
-  before `onetrust_banner`, so the working rule usually wins first — but the
-  failure mode is silent and total when it does bite. A rule with no
-  actionable method should report `handled: null`.
