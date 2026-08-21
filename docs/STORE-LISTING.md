@@ -190,12 +190,16 @@ is a bad first impression.
 These are decisions rather than text, so they are not fenced above, but they
 are asked on submit and are easy to answer wrongly under time pressure.
 
-**Publisher display name.** Account-level, and it applies to every extension
-ever published under this account. Google documents where it appears but not
-whether it can be changed later, and there are developer reports of edits not
-propagating — treat it as permanent. Note that it is *not* the privacy lever:
-what determines whether personal contact details go public is the trader
-declaration below, not this name.
+**Publisher display name: `IconoclasticGoat`.** Chosen to match the GitHub
+account the detailed description sends people to — on an extension requesting
+access to every site, a byline that agrees with the source link is worth more
+than a more formal-sounding one that doesn't. It is account-level and applies
+to every extension ever published here, so future projects inherit it.
+
+Treat it as permanent: Google documents where it appears but not whether it can
+be changed, and there are developer reports of edits not propagating. Note it
+is *not* the privacy lever — what determines whether personal contact details
+go public is the trader declaration below, not this name.
 
 **Trader / non-trader.** A mandatory EEA declaration under the Digital
 Services Act, self-declared and the developer's responsibility to get right.
