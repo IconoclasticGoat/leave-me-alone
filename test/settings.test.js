@@ -25,6 +25,15 @@ describe('settings', () => {
     expect((await getSettings()).sessionOnlyCookies).toBe(false);
   });
 
+  it('defaults camera & microphone off', async () => {
+    // Unlike notifications or location, a blocked camera/microphone doesn't
+    // just suppress the prompt — it denies access outright and overrides the
+    // user clicking Allow, breaking every in-browser video call (Meet, Zoom
+    // web) until it's switched off. Blocking a permission people actively use
+    // is opt-in, not a shipped default.
+    expect((await getSettings()).cameraMic).toBe(false);
+  });
+
   it('persists a changed toggle', async () => {
     await setSetting('notifications', false);
     expect((await getSettings()).notifications).toBe(false);

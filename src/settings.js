@@ -7,8 +7,15 @@ export const DEFAULTS = {
   // more, on by default
   gpc: true,
   popupsDownloads: true,
-  cameraMic: true,
   // more, off by default
+  // cameraMic writes Chrome's `camera` and `microphone` block. Unlike
+  // notifications or location, a blocked value doesn't merely suppress the
+  // prompt — it denies access outright and overrides the user clicking Allow,
+  // so it breaks every in-browser video call (Meet, Zoom web) until it is
+  // switched off. Blocking a permission people actively use is not a default
+  // worth shipping: it is opt-in. A site you do want it on for is covered by
+  // switching the toggle on; a single site you want exempt is covered by Pause.
+  cameraMic: false,
   // autoplaySound writes Chrome's `sound` content setting. Manual QA settled
   // what that actually does: it is a full mute, not autoplay suppression — a
   // blocked site stays silent even when the user presses play themselves. The
