@@ -129,6 +129,40 @@ describe('applyContentSettings', () => {
     expect(calls.filter(([type]) => type === 'camera' || type === 'microphone')).toEqual([]);
   });
 
+  it('allows camera & microphone on an allowlisted site while blocking elsewhere', async () => {
+    // The per-site escape hatch: a narrower 'allow' pattern outranks the
+    // <all_urls> block, so the allowlisted site gets camera/mic and every
+    // other site stays blocked.
+    await applyContentSettings({ cameraMic: true, cameraMicAllowlist: ['meet.google.com'] });
+    for (const type of ['camera', 'microphone']) {
+      expect(calls).toContainEqual([type, 'block', '<all_urls>']);
+      expect(calls).toContainEqual([type, 'allow', 'https://meet.google.com/*']);
+      expect(calls).toContainEqual([type, 'allow', 'https://*.meet.google.com/*']);
+    }
+  });
+
+  it('writes no allowlist exceptions when the cameraMic block is off', async () => {
+    // Nothing is blocking, so there is nothing to exempt from. Forcing 'allow'
+    // here would override the user's own per-site choice for a site they never
+    // asked the extension to touch.
+    await applyContentSettings({ cameraMic: false, cameraMicAllowlist: ['meet.google.com'] });
+    expect(cleared).toContain('camera');
+    expect(calls.filter(([type]) => type === 'camera' || type === 'microphone')).toEqual([]);
+  });
+
+  it('lets an allowlist entry win over a paused exception for the same site', async () => {
+    // A site can be both paused (camera released to 'ask') and allowlisted
+    // ('allow'). Same pattern, so the later write wins — allow must land last.
+    await applyContentSettings({
+      cameraMic: true,
+      pausedSites: ['meet.google.com'],
+      cameraMicAllowlist: ['meet.google.com'],
+    });
+    const pat = 'https://meet.google.com/*';
+    const cam = calls.filter(([type, , p]) => type === 'camera' && p === pat);
+    expect(cam.at(-1)).toEqual(['camera', 'allow', pat]);
+  });
+
   it('clears each type before writing, so unpausing cannot leave a stale rule', async () => {
     await applyContentSettings({ notifications: true });
     expect(cleared).toContain('notifications');

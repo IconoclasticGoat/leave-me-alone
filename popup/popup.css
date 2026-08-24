@@ -58,7 +58,8 @@ h1 {
   margin-top: .25rem;
 }
 
-#pause {
+#pause,
+#allow-cam {
   width: 100%;
   margin-top: 0.75rem;
   padding: 0.4rem;
@@ -102,7 +103,8 @@ h1 img {
    #pause rule, the symmetry could be broken by someone tuning the *unpaused*
    button's spacing, and jsdom does no layout so no unit test can catch it.
    This comment and this one declaration are the whole guard. */
-#pause.primary {
+#pause.primary,
+#allow-cam.primary {
   background: #5b60d6;
   border: 1px solid #5b60d6;
   color: #fff;

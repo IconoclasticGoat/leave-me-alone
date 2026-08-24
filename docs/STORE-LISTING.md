@@ -64,6 +64,8 @@ ONE SITE GIVING YOU TROUBLE?
 
 Pause the extension on that site from the toolbar. Everything goes back to normal there and stays as you set it everywhere else. The toolbar icon tells you at a glance which mode you're in.
 
+If you only need your camera and microphone on a site — a video call, say — and you've switched camera & mic blocking on, allow just that site from the toolbar without pausing the rest.
+
 PRIVACY
 
 This extension collects nothing, stores nothing about you, and makes no network requests of its own. Not analytics, not telemetry, not an "anonymous usage statistics" checkbox buried in the options.
@@ -109,7 +111,7 @@ This is the enforcement mechanism for six of the extension's switches. The exten
 
 Setting Chrome's default is the point: it means a site cannot prompt in the first place, rather than the extension racing to dismiss a prompt after it appears. There is no other API that can pre-answer a permission prompt.
 
-Turning a switch off calls clear() for that type, handing it back to the user's own Chrome settings rather than leaving an extension-set value behind. Pausing a site writes a narrower per-domain exception so that site behaves exactly as it would without the extension installed.
+Turning a switch off calls clear() for that type, handing it back to the user's own Chrome settings rather than leaving an extension-set value behind. Pausing a site writes a narrower per-domain exception so that site behaves exactly as it would without the extension installed. The camera and microphone block also honours a per-site allowlist: a site the user allows from the toolbar gets a narrower per-domain "allow", so they can use their camera and mic there while every other site stays blocked.
 ```
 
 <!-- field: justification_declarativeNetRequestWithHostAccess max: 1000 (self-imposed) -->

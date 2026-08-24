@@ -48,6 +48,10 @@ export async function applyContentSettings(settings) {
   const ok = [];
   const failed = [];
   const paused = settings.pausedSites ?? [];
+  // Only the cameraMic types honour this, and only while the block is written
+  // below — see the per-site loop. It is a sibling of `paused`, not a reuse:
+  // pausing frees every layer on a site; this frees camera/mic and nothing else.
+  const camAllow = settings.cameraMicAllowlist ?? [];
 
   for (const { key, types, blocked } of MAP) {
     const global = settings[key] ? blocked : null;
@@ -94,6 +98,31 @@ export async function applyContentSettings(settings) {
                 settingKey: key,
                 error: `${messageOf(e)} (pattern ${primaryPattern})`,
               });
+            }
+          }
+        }
+
+        // Per-site camera/mic allow. Written after the paused loop on purpose:
+        // a site that is both paused and allowlisted resolves to 'allow' (the
+        // later write wins at the same pattern), which is the stronger, more
+        // specific intent. Only the cameraMic types carry an allowlist, so this
+        // is a no-op for every other content-setting type.
+        if (key === 'cameraMic') {
+          for (const domain of camAllow) {
+            for (const primaryPattern of patternsFor(domain)) {
+              try {
+                await chrome.contentSettings[type].set({
+                  primaryPattern,
+                  setting: 'allow',
+                });
+              } catch (e) {
+                partial = true;
+                failed.push({
+                  type,
+                  settingKey: key,
+                  error: `${messageOf(e)} (pattern ${primaryPattern})`,
+                });
+              }
             }
           }
         }

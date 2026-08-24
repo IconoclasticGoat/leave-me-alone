@@ -1,4 +1,4 @@
-import { getSettings, setSetting, pauseSite, unpauseSite, isPaused, isPausableHost } from '../src/settings.js';
+import { getSettings, setSetting, pauseSite, unpauseSite, isPaused, isPausableHost, isCameraMicAllowed, allowCameraMic, disallowCameraMic } from '../src/settings.js';
 
 export const TOGGLE_GROUPS = {
   primary: [
@@ -88,6 +88,19 @@ export function applyPausedState(doc, host, paused) {
 }
 
 /**
+ * Labels the per-site camera/mic allow button, action-first like the pause
+ * button: the text names what a click does, not the current state. Separate
+ * from init() so it can be tested without stubbing chrome.tabs.
+ */
+export function applyCamAllowState(doc, host, allowed) {
+  const btn = doc.querySelector('#allow-cam');
+  btn.textContent = allowed
+    ? `Stop allowing camera & mic on ${host}`
+    : `Allow camera & mic on ${host}`;
+  btn.classList.toggle('primary', allowed);
+}
+
+/**
  * Exported for tests: the popup's whole tab-dependent wiring lives here, and
  * it is the only place the paused host and the failure report meet.
  */
@@ -116,6 +129,25 @@ export async function init() {
     applyPausedState(document, host, paused);
     btn.addEventListener('click', async () => {
       await (paused ? unpauseSite(host) : pauseSite(host));
+      window.close();
+    });
+  }
+
+  // The per-site camera/mic allow control. It only bears on the global
+  // cameraMic block, so it appears only while that block is on — with the
+  // block off, camera/mic already work everywhere and the button would claim
+  // to grant something already granted. It is also hidden on a paused site,
+  // which has camera/mic released already. Same host gate as Pause: a host we
+  // could not store gets no button rather than a dead one.
+  const allowCamBtn = document.querySelector('#allow-cam');
+  const camAllowed = host ? isCameraMicAllowed(settings, host) : false;
+  const canAllowCam = Boolean(host) && settings.cameraMic && !paused
+    && (camAllowed || isPausableHost(host));
+  allowCamBtn.hidden = !canAllowCam;
+  if (canAllowCam) {
+    applyCamAllowState(document, host, camAllowed);
+    allowCamBtn.addEventListener('click', async () => {
+      await (camAllowed ? disallowCameraMic(host) : allowCameraMic(host));
       window.close();
     });
   }

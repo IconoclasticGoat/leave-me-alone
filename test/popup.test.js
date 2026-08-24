@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { TOGGLE_GROUPS, renderToggles, markUnenforced, applyPausedState, init } from '../popup/popup.js';
+import { TOGGLE_GROUPS, renderToggles, markUnenforced, applyPausedState, applyCamAllowState, init } from '../popup/popup.js';
 import { DEFAULTS } from '../src/settings.js';
 
 describe('popup', () => {
@@ -232,6 +232,29 @@ describe('applyPausedState', () => {
   });
 });
 
+describe('applyCamAllowState', () => {
+  const mount = () => {
+    document.body.innerHTML = '<button id="allow-cam"></button>';
+    return document;
+  };
+
+  it('labels the action to take, not the current state', () => {
+    const doc = mount();
+    applyCamAllowState(doc, 'meet.google.com', false);
+    const btn = doc.querySelector('#allow-cam');
+    expect(btn.textContent).toBe('Allow camera & mic on meet.google.com');
+    expect(btn.classList.contains('primary')).toBe(false);
+  });
+
+  it('marks an allowed site primary and offers to stop allowing', () => {
+    const doc = mount();
+    applyCamAllowState(doc, 'meet.google.com', true);
+    const btn = doc.querySelector('#allow-cam');
+    expect(btn.textContent).toBe('Stop allowing camera & mic on meet.google.com');
+    expect(btn.classList.contains('primary')).toBe(true);
+  });
+});
+
 describe('init', () => {
   beforeEach(() => {
     // init()'s click handler closes the popup. jsdom's real window.close()
@@ -242,14 +265,15 @@ describe('init', () => {
   const mount = () => {
     document.body.innerHTML =
       '<h1></h1><div id="status"></div><div id="toggles"></div>' +
-      '<p id="errors" class="errors"></p><button id="pause"></button>';
+      '<p id="errors" class="errors"></p><button id="pause"></button>' +
+      '<button id="allow-cam" hidden></button>';
     return document;
   };
 
-  // Only the pieces init() actually touches. sync holds settings and the
-  // paused list; local holds the last apply's failures.
-  const stubChrome = ({ url, pausedSites = [], lastApplyErrors = [] }) => {
-    const sync = { pausedSites };
+  // Only the pieces init() actually touches. sync holds settings, the paused
+  // list, and the camera/mic allowlist; local holds the last apply's failures.
+  const stubChrome = ({ url, pausedSites = [], cameraMic = false, cameraMicAllowlist = [], lastApplyErrors = [] }) => {
+    const sync = { pausedSites, cameraMic, cameraMicAllowlist };
     globalThis.chrome = {
       tabs: { query: async () => (url === null ? [] : [{ url }]) },
       storage: {
@@ -341,5 +365,70 @@ describe('init', () => {
 
     expect(doc.querySelector('#pause').hidden).toBe(true);
     expect(doc.querySelector('#toggle-notifications').disabled).toBe(false);
+  });
+
+  // The per-site camera/mic allow control.
+
+  it('hides the allow-camera button when the cameraMic block is off', async () => {
+    // With the block off, camera/mic already work everywhere; the button
+    // would offer to grant something that is not being denied.
+    const doc = mount();
+    stubChrome({ url: 'https://meet.google.com/abc', cameraMic: false });
+
+    await init();
+
+    expect(doc.querySelector('#allow-cam').hidden).toBe(true);
+  });
+
+  it('offers to allow camera & mic on a storable host while the block is on', async () => {
+    const doc = mount();
+    stubChrome({ url: 'https://meet.google.com/abc', cameraMic: true });
+
+    await init();
+
+    const btn = doc.querySelector('#allow-cam');
+    expect(btn.hidden).toBe(false);
+    expect(btn.textContent).toBe('Allow camera & mic on meet.google.com');
+  });
+
+  it('adds the host to the allowlist when clicked', async () => {
+    const doc = mount();
+    const sync = stubChrome({ url: 'https://meet.google.com/abc', cameraMic: true });
+
+    await init();
+    doc.querySelector('#allow-cam').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sync.cameraMicAllowlist).toEqual(['meet.google.com']);
+  });
+
+  it('offers to stop allowing, and removes the host, when already allowed', async () => {
+    const doc = mount();
+    const sync = stubChrome({
+      url: 'https://meet.google.com/abc',
+      cameraMic: true,
+      cameraMicAllowlist: ['meet.google.com'],
+    });
+
+    await init();
+    const btn = doc.querySelector('#allow-cam');
+    expect(btn.textContent).toBe('Stop allowing camera & mic on meet.google.com');
+
+    btn.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sync.cameraMicAllowlist).toEqual([]);
+  });
+
+  it('hides the allow-camera button on a paused site, which already releases camera/mic', async () => {
+    const doc = mount();
+    stubChrome({
+      url: 'https://meet.google.com/abc',
+      cameraMic: true,
+      pausedSites: ['meet.google.com'],
+    });
+
+    await init();
+
+    expect(doc.querySelector('#allow-cam').hidden).toBe(true);
   });
 });

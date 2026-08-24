@@ -78,6 +78,31 @@ Superseded, kept for the record — the branch not taken:
       the toggle can move back to on-by-default. Moving it means moving its row in
       `TOGGLE_GROUPS.more` too, which `test/popup.test.js` enforces.
 
+### Item 3c: Per-site camera/mic allowlist
+
+The camera/mic block is absolute — an extension-set `block` overrides the
+user's own "Allow", so a site cannot be granted camera through Chrome's UI
+while the block is on. The allowlist is the escape hatch: the extension writes
+a narrower per-domain `allow` that outranks the `<all_urls>` block. Only a real
+browser can confirm the precedence actually resolves the way the unit tests
+assume.
+
+The popup control this exercises (shown with the block on, on a Meet tab):
+
+![Popup with the camera & microphone toggle on and an "Allow camera & mic on meet.google.com" button below Pause](images/popup-camera-mic-allow.png)
+
+- [ ] **Test:** Turn the camera & microphone toggle **on**. Join a Google Meet
+      (or any getUserMedia site) and confirm camera/mic are blocked. Open the
+      popup on that site and click **"Allow camera & mic on `<host>`"**. Reload
+      the tab.
+- [ ] **Expected result:** Camera and microphone now work on that site with no
+      prompt, while a *different* site (a second Meet-like page) stays blocked.
+      `chrome://settings/content/camera` shows the allowed host under Allow and
+      the global block still under the "controlled by an extension" banner.
+- [ ] **Expected result:** The allow button appears **only** while the block is
+      on and the site is not paused; re-opening the popup on the allowed site
+      offers **"Stop allowing…"**, and clicking it re-blocks the site on reload.
+
 ---
 
 ## Section 2: Cookie Settings and Session-Only Cookies
