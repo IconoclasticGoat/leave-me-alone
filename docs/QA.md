@@ -87,6 +87,10 @@ a narrower per-domain `allow` that outranks the `<all_urls>` block. Only a real
 browser can confirm the precedence actually resolves the way the unit tests
 assume.
 
+The popup control this exercises (shown with the block on, on a Meet tab):
+
+![Popup with the camera & microphone toggle on and an "Allow camera & mic on meet.google.com" button below Pause](images/popup-camera-mic-allow.png)
+
 - [ ] **Test:** Turn the camera & microphone toggle **on**. Join a Google Meet
       (or any getUserMedia site) and confirm camera/mic are blocked. Open the
       popup on that site and click **"Allow camera & mic on `<host>`"**. Reload
