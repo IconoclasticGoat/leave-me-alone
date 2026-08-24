@@ -28,7 +28,7 @@ export const DEFAULTS = {
   sessionOnlyCookies: false,
 };
 
-const SHAPE = { ...DEFAULTS, pausedSites: [] };
+const SHAPE = { ...DEFAULTS, pausedSites: [], cameraMicAllowlist: [] };
 
 export async function getSettings() {
   return chrome.storage.sync.get(SHAPE);
@@ -104,4 +104,40 @@ export async function unpauseSite(hostname) {
   const { pausedSites = [] } = await chrome.storage.sync.get({ pausedSites: [] });
   const d = stripWww(hostname);
   await chrome.storage.sync.set({ pausedSites: pausedSites.filter((x) => x !== d) });
+}
+
+// The camera/mic allowlist. A site here is exempted from the global cameraMic
+// block — and from nothing else — so a user who blocks camera everywhere can
+// still turn it on for the handful of sites they actually make calls on. It is
+// a sibling of pausedSites, not a reuse of it: pausing frees every layer on a
+// site, which is far more than "let this one site use my camera". Same storage
+// shape, same www.-stripping, same HOSTNAME_RE gate, same subdomain matching.
+
+export function isCameraMicAllowed(settings, hostname) {
+  const host = String(hostname).toLowerCase();
+  return (settings.cameraMicAllowlist ?? []).some(
+    (d) => host === d || host.endsWith(`.${d}`)
+  );
+}
+
+/**
+ * Adds a hostname to the camera/mic allowlist. Returns true when stored (or
+ * already present), false when the hostname is unstorable — the same contract
+ * and validation as pauseSite, so the popup can gate the control on
+ * isPausableHost() the way it already gates Pause.
+ */
+export async function allowCameraMic(hostname) {
+  const d = stripWww(hostname);
+  if (!HOSTNAME_RE.test(d)) return false;
+  const { cameraMicAllowlist = [] } = await chrome.storage.sync.get({ cameraMicAllowlist: [] });
+  if (!cameraMicAllowlist.includes(d)) {
+    await chrome.storage.sync.set({ cameraMicAllowlist: [...cameraMicAllowlist, d] });
+  }
+  return true;
+}
+
+export async function disallowCameraMic(hostname) {
+  const { cameraMicAllowlist = [] } = await chrome.storage.sync.get({ cameraMicAllowlist: [] });
+  const d = stripWww(hostname);
+  await chrome.storage.sync.set({ cameraMicAllowlist: cameraMicAllowlist.filter((x) => x !== d) });
 }

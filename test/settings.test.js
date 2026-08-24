@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect } from 'vitest';
-import { DEFAULTS, getSettings, setSetting, isPaused, pauseSite, unpauseSite, isPausableHost } from '../src/settings.js';
+import { DEFAULTS, getSettings, setSetting, isPaused, pauseSite, unpauseSite, isPausableHost, allowCameraMic, disallowCameraMic, isCameraMicAllowed } from '../src/settings.js';
 
 let store;
 beforeEach(() => {
@@ -144,5 +144,49 @@ describe('settings', () => {
         expect((await getSettings()).pausedSites).toEqual([host]);
       });
     }
+  });
+
+  // The camera/mic allowlist is the per-site escape hatch for the global
+  // cameraMic block: a site here gets camera/mic even while every other site
+  // stays blocked. It mirrors pausedSites — same www.-stripping, same
+  // subdomain matching, same host validation — but is its own list so a user
+  // can grant a site camera without dropping every other protection there.
+  describe('camera/mic allowlist', () => {
+    it('defaults empty', async () => {
+      expect((await getSettings()).cameraMicAllowlist).toEqual([]);
+    });
+
+    it('matches an exact stored domain and its subdomains', async () => {
+      await allowCameraMic('meet.google.com');
+      const s = await getSettings();
+      expect(isCameraMicAllowed(s, 'meet.google.com')).toBe(true);
+      expect(isCameraMicAllowed(s, 'call.meet.google.com')).toBe(true);
+      expect(isCameraMicAllowed(s, 'google.com')).toBe(false);
+    });
+
+    it('strips a leading www. and disallow removes the stored bare domain', async () => {
+      await allowCameraMic('www.example.com');
+      expect((await getSettings()).cameraMicAllowlist).toEqual(['example.com']);
+      await disallowCameraMic('www.example.com');
+      expect((await getSettings()).cameraMicAllowlist).toEqual([]);
+    });
+
+    it('is idempotent and reports whether it stored', async () => {
+      expect(await allowCameraMic('meet.google.com')).toBe(true);
+      expect(await allowCameraMic('meet.google.com')).toBe(true);
+      expect((await getSettings()).cameraMicAllowlist).toEqual(['meet.google.com']);
+    });
+
+    it('refuses an unstorable host, exactly as pauseSite does', async () => {
+      expect(await allowCameraMic('*.com')).toBe(false);
+      expect((await getSettings()).cameraMicAllowlist).toEqual([]);
+    });
+
+    it('is independent of pausedSites', async () => {
+      await allowCameraMic('meet.google.com');
+      const s = await getSettings();
+      expect(isPaused(s, 'meet.google.com')).toBe(false);
+      expect(s.pausedSites).toEqual([]);
+    });
   });
 });
