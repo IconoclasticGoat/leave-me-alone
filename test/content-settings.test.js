@@ -119,6 +119,16 @@ describe('applyContentSettings', () => {
     expect(calls).toContainEqual(['microphone', 'block', '<all_urls>']);
   });
 
+  it('does not block camera or microphone on the stock defaults', async () => {
+    // The default install path must leave camera and microphone untouched:
+    // an extension-set block overrides the user clicking Allow and breaks
+    // every in-browser video call. cameraMic is opt-in — off writes nothing.
+    await applyContentSettings({ ...DEFAULTS, pausedSites: [] });
+    expect(cleared).toContain('camera');
+    expect(cleared).toContain('microphone');
+    expect(calls.filter(([type]) => type === 'camera' || type === 'microphone')).toEqual([]);
+  });
+
   it('clears each type before writing, so unpausing cannot leave a stale rule', async () => {
     await applyContentSettings({ notifications: true });
     expect(cleared).toContain('notifications');

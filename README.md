@@ -29,11 +29,11 @@ See [docs/QA.md](docs/QA.md) for the checklist. This covers the `chrome.contentS
 
 **Primary:** cookie banners · notifications · location · newsletter popups
 
-**More, on by default:** Global Privacy Control · popups & auto-downloads · camera & microphone
+**More, on by default:** Global Privacy Control · popups & auto-downloads
 
-**More, off by default:** autoplay sound · hide chat bubbles · block Google one-tap · session-only cookies
+**More, off by default:** camera & microphone · autoplay sound · hide chat bubbles · block Google one-tap · session-only cookies
 
-Autoplay sound is off by default on purpose; see Item 3b in [docs/QA.md](docs/QA.md).
+Camera & microphone is off by default on purpose: a blocked value denies access outright and overrides the user clicking Allow, which breaks in-browser video calls. Autoplay sound is off by default too; see Item 3b in [docs/QA.md](docs/QA.md).
 
 Known gaps and deferred findings are recorded in [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 

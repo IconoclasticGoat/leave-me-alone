@@ -52,9 +52,9 @@ On by default:
 • Dismiss newsletter popups
 • Send Global Privacy Control, the "do not sell my data" signal
 • Block popups & automatic downloads
-• Block camera & microphone prompts
 
 Off by default, switch on if you want them:
+• Block camera & microphone prompts
 • Mute all sites
 • Hide chat bubbles
 • Block Google one-tap sign-in
