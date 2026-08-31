@@ -9,7 +9,7 @@ individually signed off here and should not be read as verified.
 
 ## Why manual testing?
 
-The `chrome.contentSettings` layer — which enforces the actual browser-level privacy settings (notifications, location, camera, microphone, popups, downloads, sound, cookies) — cannot be tested headlessly or in unit tests. Additionally, real-world consent-management platform (CMP) behavior is vendor-specific and evolves frequently. This checklist documents the verification that must occur in a real Chrome profile against live websites. Unit tests cover the rule engine, heuristics, and decision logic; this checklist covers whether those decisions actually work in the browser.
+The `chrome.contentSettings` layer — which enforces the actual browser-level privacy settings (notifications, location, camera, microphone, sound, cookies) — cannot be tested headlessly or in unit tests. Additionally, real-world consent-management platform (CMP) behavior is vendor-specific and evolves frequently. This checklist documents the verification that must occur in a real Chrome profile against live websites. Unit tests cover the rule engine, heuristics, and decision logic; this checklist covers whether those decisions actually work in the browser.
 
 ---
 
@@ -24,7 +24,7 @@ Before running any item below:
 
 ---
 
-## Section 1: Chrome Content Settings (Notifications, Location, Camera, Microphone, Popups, Downloads, Sound)
+## Section 1: Chrome Content Settings (Notifications, Location, Camera, Microphone, Sound)
 
 These tests verify that toggling the extension's controls correctly updates the browser's underlying `chrome.contentSettings` API, and that those settings persist across browser restarts.
 
@@ -41,14 +41,12 @@ These tests verify that toggling the extension's controls correctly updates the 
   - Toggle **off**: the banner is gone and there is no extension-controlled entry at all. Whatever the user had chosen in their own Chrome settings is back in force.
   - Off does **not** mean "Allow sites to send notifications". Off means the extension stops writing anything for this type — it never grants a permission on the user's behalf. See Item 9b, which checks this from the other direction.
 
-### Item 3: Other content settings (Location, Camera, Microphone, Popups, Automatic Downloads, Sound)
+### Item 3: Other content settings (Location, Camera, Microphone, Sound)
 
 - [ ] **Test:** Repeat the pattern from Item 2 for each setting — turn the toggle on, read the settings page, turn it off, read it again:
   - Location: `chrome://settings/content/location`
   - Camera: `chrome://settings/content/camera`
   - Microphone: `chrome://settings/content/microphone`
-  - Popups: `chrome://settings/content/popups`
-  - Automatic downloads: `chrome://settings/content/automaticDownloads`
   - Sound: `chrome://settings/content/sound` (Chrome 141+ only; on older versions, the popup should surface this as unenforced)
 
 - [ ] **Expected result:** Turning a toggle **on** puts each corresponding type into its blocking state, shown under the "controlled by an extension" banner. Turning it **off** removes the extension's entry entirely: the banner disappears and the type returns to the user's own setting. No toggle ever flips the browser to "Allow". The browser UI reflects every change immediately or on reload.
@@ -77,6 +75,28 @@ Superseded, kept for the record — the branch not taken:
 - ~~**If only automatic playback is suppressed:** the label is accurate and~~
       the toggle can move back to on-by-default. Moving it means moving its row in
       `TOGGLE_GROUPS.more` too, which `test/popup.test.js` enforces.
+
+### Item 3c: Retired popups & automatic-downloads cleanup on upgrade
+
+The removed "Block popups & automatic downloads" toggle set Chrome's `popups`
+and `automaticDownloads` types to `block`. Chrome keeps an extension's
+content-setting value across an upgrade, so an install that had that toggle
+**on** would stay blocked — unable to take a second download from a site —
+unless the new version clears it. `applyContentSettings` clears both types on
+every apply (`RETIRED` in `src/background/content-settings.js`), and
+`onInstalled` fires that apply on update. Unit-tested; this confirms it in a
+real profile.
+
+- [ ] **Test:** On a profile running the **previous** published version, turn
+      "Block popups & automatic downloads" on, then confirm
+      `chrome://settings/content/automaticDownloads` shows the
+      extension-controlled block. Now load this version over it (or bump the
+      manifest version and reload the unpacked build to fire `onInstalled`).
+      Reload the settings page.
+      **Expect:** the "controlled by an extension" banner is gone from both
+      `automaticDownloads` and `popups`, each returned to the user's own
+      Chrome setting. On a live site, a second download from the same page now
+      proceeds without a reload.
 
 ---
 
@@ -220,19 +240,14 @@ snapshot of one site on one day.
 
 The failure this catches: writing a release value at `<all_urls>` when a
 toggle is off puts the extension's preference _above_ the user's own, and for
-cookies and popups that value is `allow`. A default install would then
-force-allow cookies browser-wide. Nothing but this check surfaces it.
+cookies that value is `allow`. A default install would then force-allow
+cookies browser-wide. Nothing but this check surfaces it.
 
 - [ ] **Test:** On a **fresh profile**, load the unpacked extension and,
       without touching the popup, open `chrome://settings/content/cookies`.
       **Expect:** no "controlled by an extension" banner and no extension-set
       cookie state — `sessionOnlyCookies` is off by default, so the extension
       must have written nothing.
-- [ ] **Test:** Same profile, open `chrome://settings/content/popups`.
-      Then turn "Block popups & automatic downloads" **off** in the popup and
-      reload the settings page. **Expect:** Chrome's own default (block) is
-      still in force and no extension banner appears. The extension must never
-      make popups _more_ permitted than Chrome's default.
 - [ ] **Test:** Turn a toggle on, confirm the extension banner appears on the
       matching `chrome://settings/content/...` page, then turn it off again.
       **Expect:** the banner disappears and the setting returns to whatever

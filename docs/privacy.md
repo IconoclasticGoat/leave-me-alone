@@ -52,10 +52,9 @@ into the pause list by pressing Pause on that site.
   of sites. Reading the current tab's address tells the toolbar icon whether
   this site is paused. Nothing is transmitted as a result of this access.
 - **Content settings** — the extension sets Chrome's own defaults for
-  notifications, location, camera, microphone, popups, automatic downloads,
-  sound and cookies. This is what makes a site unable to prompt you in the
-  first place. Turning a switch off hands the setting back to your own Chrome
-  settings.
+  notifications, location, camera, microphone, sound and cookies. This is what
+  makes a site unable to prompt you in the first place. Turning a switch off
+  hands the setting back to your own Chrome settings.
 - **Storage** — the two items described above.
 - **Declarative net request (with host access)** — three bundled rules: the
   `Sec-GPC` header, and two optional blocks (Google one-tap sign-in, chat

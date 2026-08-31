@@ -22,7 +22,7 @@ export async function applyAll() {
 
 // chrome.storage.onChanged fires once per setSetting write, so flipping two
 // toggles quickly starts two applyAll runs. Each is a long awaited sequence —
-// clear, global set, then a set per paused pattern, across eight
+// clear, global set, then a set per paused pattern, across six
 // content-setting types — and concurrent runs interleave, with the last
 // writer winning per type. A stale run can therefore land its value after the
 // fresh one, leaving a type enforcing the previous state, or leaving a

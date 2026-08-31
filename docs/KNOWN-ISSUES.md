@@ -38,7 +38,7 @@ state nor a badge. The popup's paused banner is the only signal those users
 get.
 
 **Content-setting reconciliation is O(types x paused sites).** Every settings
-change clears and rewrites all eight content-setting types, plus four patterns
+change clears and rewrites all six content-setting types, plus four patterns
 per paused domain per type. Fine for a normal paused list; it would need
 batching if that list grew into the hundreds.
 

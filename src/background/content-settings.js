@@ -4,16 +4,24 @@ const MAP = [
   { key: 'notifications',   types: ['notifications'],                  blocked: 'block' },
   { key: 'location',        types: ['location'],                       blocked: 'block' },
   { key: 'cameraMic',       types: ['camera', 'microphone'],           blocked: 'block' },
-  { key: 'popupsDownloads', types: ['popups', 'automaticDownloads'],   blocked: 'block' },
   { key: 'autoplaySound',   types: ['sound'],                          blocked: 'block' },
   { key: 'sessionOnlyCookies', types: ['cookies'],                     blocked: 'session_only' },
 ];
 
-// Chrome rejects 'ask' for these three — popups and sound take only
-// allow/block, cookies takes allow/block/session_only. Everything else
-// releases to 'ask' so the decision goes back to the user rather than
-// being granted on their behalf.
-const NO_ASK = new Set(['popups', 'sound', 'cookies']);
+// Chrome rejects 'ask' for these two — sound takes only allow/block, cookies
+// takes allow/block/session_only. Everything else releases to 'ask' so the
+// decision goes back to the user rather than being granted on their behalf.
+const NO_ASK = new Set(['sound', 'cookies']);
+
+// Content-setting types this extension used to manage but no longer does.
+// Chrome keeps an extension's content-setting value across an upgrade, so a
+// value an earlier version wrote — the old "Block popups & automatic
+// downloads" toggle set both of these to 'block' at '<all_urls>' — would
+// persist forever unless the new version clears it. An install that once had
+// that toggle on would otherwise stay unable to take a second download from
+// any site. Cleared best-effort on every apply: idempotent, and clear() only
+// removes our own layer, never the user's own settings.
+const RETIRED = ['popups', 'automaticDownloads'];
 
 // Only used for the paused-domain exception, where a value *must* be written:
 // a paused site needs a pattern that outranks our own '<all_urls>' block, and
@@ -28,7 +36,7 @@ export function releaseValueFor(type) {
 // subdomains to cover anyway, so the two exact-host patterns are the whole
 // set. HOSTNAME_RE keeps IPv4 hosts pausable on purpose — a dev server on a
 // LAN address is exactly what someone wants to pause — and without this the
-// two wildcard patterns were rejected for every one of the eight
+// two wildcard patterns were rejected for every one of the six
 // content-setting types on every apply. Bracketed IPv6 literals never reach
 // here; HOSTNAME_RE rejects them outright.
 const IPV4_RE = /^\d{1,3}(\.\d{1,3}){3}$/;
@@ -48,6 +56,15 @@ export async function applyContentSettings(settings) {
   const ok = [];
   const failed = [];
   const paused = settings.pausedSites ?? [];
+
+  for (const type of RETIRED) {
+    try {
+      await chrome.contentSettings[type].clear({});
+    } catch {
+      // A type this Chrome build doesn't know, or a clear it refuses, leaves
+      // nothing of ours in force to enforce — there is nothing to surface.
+    }
+  }
 
   for (const { key, types, blocked } of MAP) {
     const global = settings[key] ? blocked : null;

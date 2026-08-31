@@ -51,7 +51,6 @@ On by default:
 • Block location requests
 • Dismiss newsletter popups
 • Send Global Privacy Control, the "do not sell my data" signal
-• Block popups & automatic downloads
 
 Off by default, switch on if you want them:
 • Block camera & microphone prompts
@@ -105,7 +104,7 @@ This is the only thing the extension writes. It is read back only by the extensi
 
 <!-- field: justification_contentSettings max: 1000 (self-imposed) -->
 ```
-This is the enforcement mechanism for six of the extension's switches. The extension calls chrome.contentSettings to set the browser's own defaults for notifications, location, camera, microphone, popups, automatic downloads, sound, and cookies.
+This is the enforcement mechanism for five of the extension's switches. The extension calls chrome.contentSettings to set the browser's own defaults for notifications, location, camera, microphone, sound, and cookies.
 
 Setting Chrome's default is the point: it means a site cannot prompt in the first place, rather than the extension racing to dismiss a prompt after it appears. There is no other API that can pre-answer a permission prompt.
 

@@ -24,13 +24,11 @@ describe('releaseValueFor', () => {
     expect(releaseValueFor('notifications')).toBe('ask');
     expect(releaseValueFor('location')).toBe('ask');
     expect(releaseValueFor('camera')).toBe('ask');
-    expect(releaseValueFor('automaticDownloads')).toBe('ask');
   });
 
-  it('releases the three types Chrome refuses ask for to allow', () => {
-    // popups, sound and cookies accept only allow/block (cookies also
-    // session_only). Sending 'ask' would throw and land in lastApplyErrors.
-    expect(releaseValueFor('popups')).toBe('allow');
+  it('releases the two types Chrome refuses ask for to allow', () => {
+    // sound and cookies accept only allow/block (cookies also session_only).
+    // Sending 'ask' would throw and land in lastApplyErrors.
     expect(releaseValueFor('sound')).toBe('allow');
     expect(releaseValueFor('cookies')).toBe('allow');
   });
@@ -92,11 +90,15 @@ describe('applyContentSettings', () => {
     expect(calls.filter(([type]) => type === 'cookies')).toEqual([]);
   });
 
-  it('never force-allows popups when the popups toggle is off', async () => {
-    // Chrome's own default for popups is *block*. Writing 'allow' would
-    // leave the browser weaker than if the extension were not installed.
-    await applyContentSettings({ popupsDownloads: false });
+  it('clears the retired popups and automaticDownloads types on every apply', async () => {
+    // These two backed the removed "Block popups & automatic downloads"
+    // toggle. Chrome keeps an extension's content-setting value across an
+    // upgrade, so an install that once had that toggle on would stay blocked
+    // — unable to take a second download from a site — unless the new version
+    // clears it. They are cleared regardless of any toggle and never written.
+    await applyContentSettings({ ...DEFAULTS, pausedSites: [] });
     expect(cleared).toContain('popups');
+    expect(cleared).toContain('automaticDownloads');
     expect(calls.filter(([type]) => type === 'popups')).toEqual([]);
     expect(calls.filter(([type]) => type === 'automaticDownloads')).toEqual([]);
   });
@@ -160,7 +162,7 @@ describe('applyContentSettings', () => {
   it('applies a paused bare-IP host with nothing left unenforced', async () => {
     // Chrome rejects a wildcard subdomain on an IP literal, so stub that
     // rule and let every type run against it. Before patternsFor skipped
-    // those patterns, this failed two of four patterns for all eight
+    // those patterns, this failed two of four patterns for all six
     // content-setting types on every apply — a permanent unenforced marker
     // on every toggle in the popup, for a host the user validly paused.
     for (const type of Object.keys(chrome.contentSettings)) {

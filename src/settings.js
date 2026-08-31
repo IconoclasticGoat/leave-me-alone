@@ -6,7 +6,6 @@ export const DEFAULTS = {
   newsletters: true,
   // more, on by default
   gpc: true,
-  popupsDownloads: true,
   // more, off by default
   // cameraMic writes Chrome's `camera` and `microphone` block. Unlike
   // notifications or location, a blocked value doesn't merely suppress the
