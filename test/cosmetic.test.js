@@ -276,6 +276,44 @@ describe('the captured bbc.com/news banner', () => {
   });
 });
 
+describe('a banner rendered inside a shadow root', () => {
+  // commure.com, captured 2026-08-31. An Osano "consent opt-in" widget renders
+  // its whole banner — prose and buttons — inside an OPEN shadow root on a bare
+  // host <div> (display: contents). querySelectorAll stops at the shadow
+  // boundary, so neither the rule engine nor the light-DOM cosmetic pass can
+  // see it. The banner itself passes every looksLikeBanner check; it was only
+  // ever unreachable.
+  const stub = (el) => { el.getBoundingClientRect = () => ({ width: 600, height: 90 }); };
+
+  it('hides a fixed cookie banner living in an open shadow root', () => {
+    document.body.innerHTML = '<div id="host"></div>';
+    const host = document.querySelector('#host');
+    const shadow = host.attachShadow({ mode: 'open' });
+    shadow.innerHTML = `<div id="b" style="position:fixed;z-index:500">
+      By clicking Accept you agree to the storing of cookies.
+      <button>Accept</button></div>`;
+    stub(host);
+    for (const el of shadow.querySelectorAll('*')) stub(el);
+
+    expect(hideCookieBanners(document)).toBe(1);
+    expect(shadow.querySelector('#b').style.display).toBe('none');
+  });
+
+  it('does not throw on a closed shadow root it cannot enter', () => {
+    // A closed root exposes no shadowRoot to script, so it is unreachable by
+    // design — the sweep must skip it cleanly rather than choke on it.
+    document.body.innerHTML = '<div id="host"></div>';
+    const host = document.querySelector('#host');
+    const shadow = host.attachShadow({ mode: 'closed' });
+    shadow.innerHTML = `<div id="b" style="position:fixed;z-index:500">
+      We use cookies. <button>Accept</button></div>`;
+    stub(host);
+    for (const el of shadow.querySelectorAll('*')) stub(el);
+
+    expect(hideCookieBanners(document)).toBe(0);
+  });
+});
+
 describe('restoreScroll', () => {
   it('clears overflow hidden on body and html', () => {
     document.documentElement.style.overflow = 'hidden';

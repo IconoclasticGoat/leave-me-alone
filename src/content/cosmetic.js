@@ -127,6 +127,26 @@ function overlayFor(frame) {
   return null;
 }
 
+// querySelectorAll stops at every shadow boundary, so a banner rendered inside
+// a shadow root is invisible to a plain query on the document — the host
+// element is a bare wrapper with no prose and no buttons of its own. Consent
+// widgets increasingly do exactly this (Osano's "consent opt-in" on
+// commure.com renders the whole banner inside an OPEN shadow root), so gather
+// the root plus every open shadow root beneath it and query each in turn.
+// Closed roots expose no shadowRoot to script and are simply skipped — they are
+// unreachable by design, not a case we can rescue.
+function scopesUnder(root) {
+  const scopes = [root];
+  for (const el of root.querySelectorAll('*')) {
+    if (el.shadowRoot) scopes.push(...scopesUnder(el.shadowRoot));
+  }
+  return scopes;
+}
+
+function deepQuery(root, selector) {
+  return scopesUnder(root).flatMap((s) => [...s.querySelectorAll(selector)]);
+}
+
 export function hideCookieBanners(root = document) {
   const hidden = new Set();
   const hide = (el) => {
@@ -134,12 +154,12 @@ export function hideCookieBanners(root = document) {
     hidden.add(el);
   };
 
-  for (const el of root.querySelectorAll('div, section, aside, dialog, footer, nav')) {
+  for (const el of deepQuery(root, 'div, section, aside, dialog, footer, nav')) {
     if (looksLikeBanner(el)) hide(el);
   }
   // Second pass: banners the first cannot see at all, because their prose and
   // their buttons are behind a frame boundary.
-  for (const frame of root.querySelectorAll('iframe[src]')) {
+  for (const frame of deepQuery(root, 'iframe[src]')) {
     const overlay = overlayFor(frame);
     if (overlay) hide(overlay);
   }
