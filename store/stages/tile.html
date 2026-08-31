@@ -7,10 +7,14 @@
      no more: mark, name, one claim. */
   .wrap { position: absolute; inset: 0; display: grid; align-content: center;
           justify-items: center; text-align: center; gap: 2px; z-index: 3; }
-  img { width: 56px; height: 56px; margin-bottom: 12px; }
-  h1 { font-size: 42px; line-height: 1; margin: 0; }
-  p { margin: 12px 0 0; font-size: 14px; color: var(--ink-soft); letter-spacing: .01em; }
-  .rule { width: 44px; height: 2px; background: var(--accent); margin-top: 16px; }
+  img { width: 58px; height: 58px; margin-bottom: 12px; }
+  h1 { font-size: 44px; line-height: 1; margin: 0; }
+  /* The store renders this 440x280 tile at roughly 340px on the listing card,
+     so the tagline is sized up and darkened to stay readable there — the old
+     14px --ink-soft line was the part that vanished. It wraps to two lines. */
+  p { margin: 14px 0 0; font-size: 20px; line-height: 1.3; color: var(--ink);
+      max-width: 250px; }
+  .rule { width: 44px; height: 2px; background: var(--accent); margin-top: 18px; }
 </style>
 <div class="wrap">
   <img src="/ext/icons/active-128.png" alt="">

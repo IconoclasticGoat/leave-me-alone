@@ -36,8 +36,13 @@ body::after {
     radial-gradient(90% 70% at 92% 96%, rgba(22,22,26,.055), transparent 62%);
 }
 
+/* Sizes here are chosen against the store, not the file: the listing shrinks
+   the whole 1280x800 shot to roughly half width in its carousel, so every
+   size below is about twice what it would be in a page meant to be read at
+   1:1. Anything under ~22px in this frame is illegible once the store is done
+   with it. */
 .eyebrow {
-  font-size: 12px; font-weight: 600; letter-spacing: .14em;
+  font-size: 16px; font-weight: 600; letter-spacing: .14em;
   text-transform: uppercase; color: var(--accent);
 }
 

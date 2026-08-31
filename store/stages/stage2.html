@@ -2,13 +2,17 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="stage.css">
 <style>
-  .head { position: absolute; left: 80px; top: 56px; width: 1120px; z-index: 3; }
-  h1 { font-size: 42px; line-height: 1.05; margin: 10px 0 0; }
-  .sub { max-width: 64ch; font-size: 16px; }
-  .band { left: 80px; width: 1120px; height: 246px; position: absolute; }
-  .band iframe { width: 1120px; height: 246px; }
-  #before { top: 268px; }
-  #after  { top: 538px; }
+  /* Each band shows a zoomed crop of the real demo page: the iframe lays out
+     at a narrow 700px viewport and is zoomed 1.6x, so the consent bar's own
+     14px text lands at ~22px in the shot and stays readable once the store
+     shrinks it. */
+  .head { position: absolute; left: 84px; top: 48px; width: 1112px; z-index: 3; }
+  h1 { font-size: 46px; line-height: 1.04; margin: 12px 0 0; }
+  .sub { max-width: 74ch; font-size: 25px; line-height: 1.4; margin-top: 14px; }
+  .band { left: 84px; width: 1112px; height: 258px; position: absolute; }
+  .band iframe { width: 695px; height: 161px; zoom: 1.6; }
+  #before { top: 250px; }
+  #after  { top: 528px; }
 </style>
 
 <div class="head">
