@@ -4,6 +4,10 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 // interleave rather than each racing through in one microtask drain.
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
+// The six types the extension still manages, plus popups and
+// automaticDownloads — no longer managed, but applyContentSettings still
+// clears them each run to undo a value an older version may have written, so
+// the chrome stub must provide them.
 const CS_TYPES = [
   'notifications', 'location', 'camera', 'microphone',
   'popups', 'automaticDownloads', 'sound', 'cookies',
@@ -58,7 +62,7 @@ describe('applyAll scheduling', () => {
 
   it('runs two rapid schedules one after the other, never overlapped', async () => {
     // Each applyAll is a long awaited sequence of clear → set → per-domain
-    // sets across eight content-setting types. Concurrent runs interleave and
+    // sets across six content-setting types. Concurrent runs interleave and
     // the last writer wins per type, so a stale run can land its value after
     // the fresh one and leave a type enforcing the previous state.
     const { schedule } = await loadBackground();

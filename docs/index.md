@@ -18,7 +18,7 @@ answer before it asks.
 
 **On by default:** reject cookie banners · block notification prompts · block
 location requests · dismiss newsletter popups · send Global Privacy Control ·
-block popups & automatic downloads · block camera & microphone prompts
+block camera & microphone prompts
 
 **Off by default:** mute all sites · hide chat bubbles · block Google one-tap
 sign-in · delete all cookies on quit

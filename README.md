@@ -29,7 +29,7 @@ See [docs/QA.md](docs/QA.md) for the checklist. This covers the `chrome.contentS
 
 **Primary:** cookie banners · notifications · location · newsletter popups
 
-**More, on by default:** Global Privacy Control · popups & auto-downloads
+**More, on by default:** Global Privacy Control
 
 **More, off by default:** camera & microphone · autoplay sound · hide chat bubbles · block Google one-tap · session-only cookies
 

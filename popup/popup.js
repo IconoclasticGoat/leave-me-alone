@@ -9,7 +9,6 @@ export const TOGGLE_GROUPS = {
   ],
   more: [
     { key: 'gpc',             label: 'Send Global Privacy Control' },
-    { key: 'popupsDownloads', label: 'Block popups & automatic downloads' },
     { key: 'cameraMic',       label: 'Block camera & microphone prompts' },
     { key: 'autoplaySound',   label: 'Mute all sites',
       warning: 'Sites stay silent even when you press play.' },
