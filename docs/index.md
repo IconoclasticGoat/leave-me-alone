@@ -17,11 +17,10 @@ Turn on the switches you want. From then on, every site you visit gets that
 answer before it asks.
 
 **On by default:** reject cookie banners · block notification prompts · block
-location requests · dismiss newsletter popups · send Global Privacy Control ·
-block camera & microphone prompts
+location requests · dismiss newsletter popups · send Global Privacy Control
 
-**Off by default:** mute all sites · hide chat bubbles · block Google one-tap
-sign-in · delete all cookies on quit
+**Off by default:** block camera & microphone prompts · mute all sites · hide
+chat bubbles · block Google one-tap sign-in · delete all cookies on quit
 
 ## Honest about the limits
 
