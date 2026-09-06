@@ -59,12 +59,15 @@ function prose(el) {
 
 // An <a> is navigation, not a control — unless it goes nowhere. A consent
 // "OK" that only sets a fragment dismisses the banner in place, while a policy
-// link leaves the page; that is the line, not the tag. Anchors with no href at
-// all stay excluded: sites use those for layout as often as for controls, and
-// no reported banner has needed them.
+// link leaves the page; that is the line, not the tag. An anchor with no href
+// counts only when it says it is a button: the cookieconsent library's
+// "Got it!" is <a role="button" class="cc-btn cc-dismiss"> (neighborhoodscout.com),
+// and role=button is the page telling assistive tech this is a control, not
+// a link. A bare <a> with neither stays excluded: sites use those for layout
+// as often as for controls, and no reported banner has needed them.
 function isInPageControl(a) {
   const href = (a.getAttribute('href') ?? '').trim();
-  if (!href) return false;
+  if (!href) return a.getAttribute('role') === 'button';
   if (/^javascript:/i.test(href)) return true;
   try {
     const base = a.ownerDocument.baseURI;
