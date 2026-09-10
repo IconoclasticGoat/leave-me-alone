@@ -116,7 +116,7 @@ Turning a switch off calls clear() for that type, handing it back to the user's 
 Three rules, all bundled in the package. No rules are fetched or updated at runtime.
 
 1. Sets the "Sec-GPC: 1" request header when the user turns on Global Privacy Control. This is the header form of the opt-out signal recognised under CCPA/CPRA.
-2. Blocks accounts.google.com/gsi/ when the user turns on "Block Google one-tap sign-in".
+2. Blocks the accounts.google.com/gsi/iframe/select prompt iframe (the One Tap card) when the user turns on "Block Google one-tap sign-in". The "Sign in with Google" button is left working.
 3. Blocks four known chat-widget script hosts when the user turns on "Hide chat bubbles".
 
 Rules belonging to a switched-off setting are never registered, so a user who leaves rules 2 and 3 off has no blocking rules active at all. Paused domains are excluded from every rule.

@@ -3,7 +3,7 @@
   "priority": 1,
   "action": { "type": "block" },
   "condition": {
-    "urlFilter": "||accounts.google.com/gsi/",
-    "resourceTypes": ["sub_frame", "script"]
+    "urlFilter": "||accounts.google.com/gsi/iframe/select",
+    "resourceTypes": ["sub_frame"]
   }
 }]
