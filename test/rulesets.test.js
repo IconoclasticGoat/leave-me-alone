@@ -18,6 +18,45 @@ describe('rule sources', () => {
   });
 });
 
+// Minimal model of Chrome's `||domain/path` urlFilter (literal, no wildcards):
+// anchors at the domain boundary — the domain itself or any subdomain — then
+// requires the URL, from immediately after the host, to start with the rest of
+// the pattern. Enough to prove which Google Identity Services endpoints a rule
+// does and does not block.
+function blocks(filter, url) {
+  const m = filter.match(/^\|\|([^/*^]+)(.*)$/);
+  if (!m) throw new Error(`test helper only models ||domain filters, got: ${filter}`);
+  const [, domain, rest] = m;
+  const u = new URL(url);
+  const hostOk = u.hostname === domain || u.hostname.endsWith(`.${domain}`);
+  return hostOk && (u.pathname + u.search).startsWith(rest);
+}
+
+describe('google one-tap rule', () => {
+  const ruleOf = () =>
+    buildDynamicRules({ googleOneTap: true }).find((r) => r.id === 2);
+
+  // The One Tap prompt is an iframe the gsi/client library loads from
+  // prompt_url = accounts.google.com/gsi/iframe/select. Blocking that sub_frame
+  // removes the prompt card without touching anything else Google serves.
+  it('blocks the One Tap prompt iframe', () => {
+    const { condition } = ruleOf();
+    expect(blocks(condition.urlFilter, 'https://accounts.google.com/gsi/iframe/select?client_id=x')).toBe(true);
+    expect(condition.resourceTypes).toEqual(['sub_frame']);
+  });
+
+  // Regression: the filter used to be ||accounts.google.com/gsi/, which also
+  // blocked the gsi/client library (a script) and the gsi/button iframe. That
+  // broke the user-initiated "Sign in with Google" button — including on
+  // claude.ai — not just the auto-prompt the toggle names.
+  it('leaves the Sign in with Google library, button, and styles working', () => {
+    const { urlFilter } = ruleOf().condition;
+    expect(blocks(urlFilter, 'https://accounts.google.com/gsi/client')).toBe(false);
+    expect(blocks(urlFilter, 'https://accounts.google.com/gsi/button?client_id=x')).toBe(false);
+    expect(blocks(urlFilter, 'https://accounts.google.com/gsi/style')).toBe(false);
+  });
+});
+
 describe('buildDynamicRules', () => {
   it('includes only the rules whose toggles are on', () => {
     const rules = buildDynamicRules({ gpc: true, googleOneTap: false, chatWidgets: true });

@@ -172,7 +172,7 @@ as 0x0 long after it is live — only *ordering* survives that. See
 - `state.handled` never resets, so SPA route changes get no second pass.
 - `createSweeper`'s `start()` is non-reentrant; `stop()` before `start()` is a silent no-op.
 - `rules/gpc.json` sets `Sec-GPC` only on `main_frame`, `sub_frame`, and `xmlhttprequest` — not images, scripts, stylesheets, beacons, or websockets.
-- `rules/one-tap.json` blocks `accounts.google.com/gsi/`, which disables the ordinary "Sign in with Google" button as well as one-tap. The toggle label undersells this.
+- `rules/one-tap.json` blocks only `accounts.google.com/gsi/iframe/select` (the One Tap prompt card iframe, `gsi/client`'s `prompt_url`). It no longer blocks the whole `gsi/` path, which had also taken out the `gsi/client` library and the `gsi/button` iframe and so broke the ordinary "Sign in with Google" button (reported on claude.ai). The FedCM-mediated One Tap prompt (`gsi/fedcm/config/passive`) is browser-native and not covered.
 - `rules/chat-widgets.json` blocks `static.zdassets.com`, which serves Zendesk Help Center assets generally, not just chat.
 - `manifest.json` has no `minimum_chrome_version` despite `contentSettings.sound` requiring Chrome 141+.
 - `web_accessible_resources` lacks `use_dynamic_url: true`, so any page can probe for `gpc-main.js` and fingerprint the extension.
