@@ -314,6 +314,73 @@ describe('a banner rendered inside a shadow root', () => {
   });
 });
 
+describe('a CMP rendered inside a same-origin iframe', () => {
+  // rula.com, captured 2026-09-10. BigID renders its banner into a same-origin
+  // iframe (id="bigidcmp-banner-widget", empty src, position: fixed): the prose
+  // and the Reject/Accept buttons live in the FRAME's own document, which the
+  // light-DOM pass never queries into, while the frame's src is the page's own
+  // origin so the cross-origin allowlist (isCmpFrame) never matches it either.
+  // The frame is readable because it is same-origin, so the fix reads inside to
+  // confirm the banner and hides the frame element, which is the fixed bar.
+  const bannerHtml = `<div class="wrap">
+    <p>We use cookies to improve and personalize our site, support marketing,
+    and analyze usage. By selecting "Reject," you opt out of targeted
+    advertising.</p>
+    <a href="https://www.rula.com/privacy-policy/">Privacy policy</a>
+    <button>Reject</button><button>Accept all</button></div>`;
+
+  // Build a same-origin iframe and write the banner into its own document, then
+  // stub the geometry both documents' isShown() reads.
+  const mountFrame = (style, inner) => {
+    document.body.innerHTML = `<iframe id="f" style="${style}"></iframe>`;
+    const f = document.querySelector('#f');
+    f.getBoundingClientRect = () => ({ width: 1265, height: 147 });
+    f.contentDocument.body.innerHTML = inner;
+    for (const el of f.contentDocument.querySelectorAll('*')) {
+      el.getBoundingClientRect = () => ({ width: 600, height: 90 });
+    }
+    return f;
+  };
+
+  it('hides a fixed same-origin iframe whose document is a cookie banner', () => {
+    const f = mountFrame('position:fixed;z-index:2147483647', bannerHtml);
+    expect(hideCookieBanners(document)).toBe(1);
+    expect(f.style.display).toBe('none');
+  });
+
+  describe('single-condition guard isolation', () => {
+    it('ignores a fixed same-origin iframe whose document has no cookie language', () => {
+      // Same shape — shown, fixed, has an accept control — so only the
+      // cookie-language requirement can produce 0. Keeps an ordinary fixed
+      // widget iframe (a support chat, say) on the page.
+      const f = mountFrame('position:fixed',
+        '<p>Chat with our team! <button>Accept the invite</button></p>');
+      expect(hideCookieBanners(document)).toBe(0);
+      expect(f.style.display).toBe('');
+    });
+
+    it('ignores a same-origin cookie iframe that is not fixed or sticky', () => {
+      // Cookie prose and a Reject button inside, but the frame is in-flow, so
+      // only the fixed/sticky requirement can produce 0. An in-flow frame is
+      // covering nothing and needs no rescuing.
+      const f = mountFrame('', bannerHtml);
+      expect(hideCookieBanners(document)).toBe(0);
+      expect(f.style.display).toBe('');
+    });
+
+    it('ignores a fixed same-origin cookie iframe with no accept/reject control', () => {
+      // Shown, fixed, cookie prose — so only the accept-control requirement can
+      // produce 0. The lone link navigates away, which acceptControls filters
+      // out exactly as it does in the light DOM.
+      const f = mountFrame('position:fixed',
+        `<p>We use cookies to personalize our site.</p>
+         <a href="https://www.rula.com/privacy-policy/">Privacy policy</a>`);
+      expect(hideCookieBanners(document)).toBe(0);
+      expect(f.style.display).toBe('');
+    });
+  });
+});
+
 describe('restoreScroll', () => {
   it('clears overflow hidden on body and html', () => {
     document.documentElement.style.overflow = 'hidden';

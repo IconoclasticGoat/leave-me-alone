@@ -109,6 +109,35 @@ export function isCmpFrame(frame) {
   return CMP_FRAME_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
 }
 
+// A consent iframe served from the page's OWN origin is one we can actually
+// read into: the prose and the accept/reject controls live in the frame's own
+// document, while the fixed placement sits on the frame element itself
+// (rula.com's BigID widget renders an id="bigidcmp-banner-widget" iframe with
+// an empty src, position: fixed — captured 2026-09-10). The light-DOM pass
+// never queries into a frame document, and the cross-origin allowlist above
+// never matches a same-origin src, so this shape slips past both. A
+// cross-origin frame hands back a null contentDocument and is left to the
+// allowlist pass; only a frame we can read is a candidate here. The test is the
+// same conjunction looksLikeBanner applies — cookie prose AND an accept control
+// on a shown, fixed/sticky box — with the prose and controls sourced from the
+// frame's document and the position read from the frame element.
+function isSameOriginBannerFrame(frame) {
+  if (!isShown(frame)) return false;
+  const { position } = frame.ownerDocument.defaultView.getComputedStyle(frame);
+  if (position !== 'fixed' && position !== 'sticky') return false;
+  let body;
+  try {
+    body = frame.contentDocument?.body;
+  } catch {
+    return false; // cross-origin: unreadable, not ours to act on here
+  }
+  if (!body) return false;
+  if ((body.textContent ?? '').length > 1200) return false; // an app shell, not a banner
+  const mentionsCookies = COOKIE_WORDS.some((w) => prose(body).includes(w));
+  const hasButton = acceptControls(body).some((b) => matchesAcceptWord(b.textContent));
+  return mentionsCookies && hasButton;
+}
+
 // The element to hide for a CMP frame is the fixed wrapper the CMP puts
 // around it, not the frame: the wrapper is what covers the viewport and
 // swallows every click, and it survives hiding the frame alone.
@@ -157,11 +186,17 @@ export function hideCookieBanners(root = document) {
   for (const el of deepQuery(root, 'div, section, aside, dialog, footer, nav')) {
     if (looksLikeBanner(el)) hide(el);
   }
-  // Second pass: banners the first cannot see at all, because their prose and
-  // their buttons are behind a frame boundary.
+  // Second pass: cross-origin CMP frames, whose prose and buttons are behind a
+  // frame boundary we cannot read — hide the fixed wrapper around them.
   for (const frame of deepQuery(root, 'iframe[src]')) {
     const overlay = overlayFor(frame);
     if (overlay) hide(overlay);
+  }
+  // Third pass: same-origin CMP frames, which we CAN read — confirm the banner
+  // inside and hide the frame element, which is itself the fixed bar. Queried
+  // without [src] because these frames often carry no src attribute at all.
+  for (const frame of deepQuery(root, 'iframe')) {
+    if (isSameOriginBannerFrame(frame)) hide(frame);
   }
   return hidden.size;
 }
