@@ -14,6 +14,8 @@ export const CONTENT_BUILD = {
     content: 'src/content/index.js',
     'gpc-inject': 'src/content/gpc-inject.js',
     'gpc-main': 'src/content/gpc-main.js',
+    'one-tap-inject': 'src/content/one-tap-inject.js',
+    'one-tap-main': 'src/content/one-tap-main.js',
   },
 };
 
