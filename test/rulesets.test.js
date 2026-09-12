@@ -36,10 +36,15 @@ describe('google one-tap rule', () => {
   const ruleOf = () =>
     buildDynamicRules({ googleOneTap: true }).find((r) => r.id === 2);
 
-  // The One Tap prompt is an iframe the gsi/client library loads from
+  // The pre-FedCM One Tap prompt is an iframe gsi/client loads from
   // prompt_url = accounts.google.com/gsi/iframe/select. Blocking that sub_frame
   // removes the prompt card without touching anything else Google serves.
-  it('blocks the One Tap prompt iframe', () => {
+  //
+  // Current Chrome never requests it — the prompt comes through FedCM, which
+  // no rule can see, and is stopped in the page instead (test/one-tap.test.js).
+  // This rule is what still covers a browser or a gsi/client configuration on
+  // the iframe path, so it stays, and stays narrow.
+  it('blocks the legacy One Tap prompt iframe', () => {
     const { condition } = ruleOf();
     expect(blocks(condition.urlFilter, 'https://accounts.google.com/gsi/iframe/select?client_id=x')).toBe(true);
     expect(condition.resourceTypes).toEqual(['sub_frame']);
@@ -48,7 +53,10 @@ describe('google one-tap rule', () => {
   // Regression: the filter used to be ||accounts.google.com/gsi/, which also
   // blocked the gsi/client library (a script) and the gsi/button iframe. That
   // broke the user-initiated "Sign in with Google" button — including on
-  // claude.ai — not just the auto-prompt the toggle names.
+  // claude.ai — not just the auto-prompt the toggle names. Blocking the
+  // library is also the only reason the broad rule appeared to stop One Tap
+  // at all, so this must not be widened back to buy the block returned: the
+  // block lives in src/content/one-tap-guard.js now.
   it('leaves the Sign in with Google library, button, and styles working', () => {
     const { urlFilter } = ruleOf().condition;
     expect(blocks(urlFilter, 'https://accounts.google.com/gsi/client')).toBe(false);

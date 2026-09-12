@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Leave Me Alone",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Necessary cookies only. No notification prompts, no location requests, no newsletter popups. On every site, automatically.",
   "permissions": ["storage", "contentSettings", "declarativeNetRequestWithHostAccess"],
   "host_permissions": ["<all_urls>"],
@@ -23,7 +23,9 @@
   },
   "content_scripts": [
     { "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle", "all_frames": true },
-    { "matches": ["<all_urls>"], "js": ["gpc-inject.js"], "run_at": "document_start", "all_frames": true }
+    { "matches": ["<all_urls>"], "js": ["gpc-inject.js"], "run_at": "document_start", "all_frames": true },
+    { "matches": ["<all_urls>"], "js": ["one-tap-main.js"], "run_at": "document_start", "all_frames": true, "world": "MAIN" },
+    { "matches": ["<all_urls>"], "js": ["one-tap-inject.js"], "run_at": "document_start", "all_frames": true }
   ],
   "web_accessible_resources": [
     { "resources": ["gpc-main.js"], "matches": ["<all_urls>"] }

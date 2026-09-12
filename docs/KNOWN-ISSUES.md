@@ -117,6 +117,21 @@ three rules keep working. One fewer warning, no functional change.
 
 ## Performance
 
+**One Tap is no longer blockable at the network layer.** Since the FedCM
+migration, `gsi/client` raises the One Tap prompt by calling
+`navigator.credentials.get({identity: {providers: [...], mode: "passive"}})`,
+and Chrome draws the card itself. No page-visible request carries the prompt,
+so `declarativeNetRequest` has nothing to match — verified in a real Chrome
+profile, where a blocked-by-us prompt returns in under a millisecond and a
+passed-through one spends twelve seconds on the network. What the old
+`||accounts.google.com/gsi/` rule was really doing was blocking `gsi/client`
+itself, which is why narrowing it to the prompt iframe silently un-blocked One
+Tap on every site (reported on fandom.com, v1.1.2). The block now lives in
+`src/content/one-tap-guard.js`, in the page's own world, and keys off
+`identity.mode`: `passive` is the prompt, `active` is the Sign in with Google
+button, and only the first is refused. `mediation` cannot be used for this —
+`gsi/client` sets it from auto-reauthn and sends the same value for both.
+
 **`dist/content.js` is ~492 KB and injects into every frame.** The 455 KB rule bundle is inlined at build time, and the manifest uses `all_frames: true`. An ad-heavy page with 30 subframes parses roughly 15 MB of script. Options: run the engine only in the top frame; load the bundle via `chrome.runtime.getURL` (an extension-internal URL, so the zero-network-requests promise survives); or hold it in the service worker.
 
 **Every sweep evaluates all 202 rules' detectors** — 207 detectors, 409 selectors, re-run on each debounced mutation for the observer's lifetime, in every frame, until a CMP is handled. A cheap first-pass filter (a combined selector, or sniffing for `__tcfapi` / `OneTrust` / `Cookiebot` globals) before the per-rule loop would cut most of it.
@@ -172,7 +187,9 @@ as 0x0 long after it is live — only *ordering* survives that. See
 - `state.handled` never resets, so SPA route changes get no second pass.
 - `createSweeper`'s `start()` is non-reentrant; `stop()` before `start()` is a silent no-op.
 - `rules/gpc.json` sets `Sec-GPC` only on `main_frame`, `sub_frame`, and `xmlhttprequest` — not images, scripts, stylesheets, beacons, or websockets.
-- `rules/one-tap.json` blocks only `accounts.google.com/gsi/iframe/select` (the One Tap prompt card iframe, `gsi/client`'s `prompt_url`). It no longer blocks the whole `gsi/` path, which had also taken out the `gsi/client` library and the `gsi/button` iframe and so broke the ordinary "Sign in with Google" button (reported on claude.ai). The FedCM-mediated One Tap prompt (`gsi/fedcm/config/passive`) is browser-native and not covered.
+- `rules/one-tap.json` only covers the pre-FedCM One Tap, the prompt card iframe at `accounts.google.com/gsi/iframe/select` (`gsi/client`'s `prompt_url`). On current Chrome that iframe is never requested; the block that matters is the `navigator.credentials` guard described above. The rule is kept for browsers and `gsi/client` configurations still on the iframe path, and costs nothing where it never matches.
+- The MAIN-world guard learns the toggle state from a DOM event the ISOLATED-world injector dispatches, because neither world can do both jobs. A page could dispatch that event itself, ahead of the injector, and un-block its own One Tap. Closing this needs a channel the page cannot reach — dynamically registered MAIN-world scripts, which means the `scripting` permission.
+- The guard is injected into every frame of every page, including for the majority of users who leave the toggle off. It unwraps itself as soon as it hears the toggle is off, so the page is left with the original `navigator.credentials.get`, but for those first few milliseconds every credential request on the web goes through extension code.
 - `rules/chat-widgets.json` blocks `static.zdassets.com`, which serves Zendesk Help Center assets generally, not just chat.
 - `manifest.json` has no `minimum_chrome_version` despite `contentSettings.sound` requiring Chrome 141+.
 - `web_accessible_resources` lacks `use_dynamic_url: true`, so any page can probe for `gpc-main.js` and fingerprint the extension.

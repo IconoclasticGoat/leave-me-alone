@@ -2,7 +2,8 @@
 
 **Status: PARTIALLY RUN.** A manual pass was made against a real Chrome
 profile before the Web Store submission. Item 3b was executed and is recorded
-as resolved below. Items still showing an unchecked box have not been
+as resolved below, as is Item 13 — that one automated, against a real Chromium
+rather than by hand. Items still showing an unchecked box have not been
 individually signed off here and should not be read as verified.
 
 ---
@@ -300,6 +301,56 @@ has no automated guard at all. Re-run this after **any** change to
 - [ ] **Expected result:**
   - If Chrome is **141 or later**, all toggles (including sound) work in the browser settings.
   - If Chrome is **before 141**, open the popup and confirm that the sound toggle is labeled or marked as unenforced in the UI. The popup should surface this limitation clearly.
+
+---
+
+## Section 9: Google One Tap
+
+### Item 13: One Tap after the FedCM migration — RESOLVED: NOT A NETWORK REQUEST
+
+v1.1.2 narrowed the one-tap rule from the whole `accounts.google.com/gsi/`
+path to the prompt iframe alone, to stop it breaking the ordinary "Sign in
+with Google" button. One Tap then came back on fandom.com. The question was
+whether the narrowing was wrong or the premise was.
+
+The premise. `gsi/client` now raises the prompt through FedCM —
+`navigator.credentials.get({identity: {providers: [...], mode: "passive"}})` —
+and the card is drawn by the browser. The `gsi/iframe/select` sub_frame the
+rule blocks is never requested, so the rule matches nothing. The old broad
+rule had been suppressing One Tap by blocking `gsi/client` itself, which is
+also what broke the button.
+
+Verified against the built extension in a real Chromium, driven by Playwright,
+on a page that calls `navigator.credentials.get` directly:
+
+| Toggle | `mode: "passive"` (One Tap) | `mode: "active"` (button) | `{password: true}` |
+| --- | --- | --- | --- |
+| off (default) | reached the network, 16.5 s | reached the network, 12.5 s | untouched |
+| on | refused in 0.2 ms | reached the network, 12.5 s | untouched |
+| on, site paused | reached the network, 15.8 s | reached the network, 12.5 s | untouched |
+
+The timings are the measurement, not a performance note: a call this extension
+refuses returns in well under a millisecond without touching the network,
+while a call it passes through spends seconds failing to reach Google from a
+sandboxed runner. Nothing else distinguishes them — the guard deliberately
+rejects with the same `NetworkError: Error retrieving a token.` that Chrome
+itself returns.
+
+Also confirmed in the same run:
+
+- The guard is installed before the page's own first inline script, in all
+  three configurations. This is why it is a manifest-declared `"world":
+  "MAIN"` script and not the `gpc-inject.js` pattern, which lands tens of
+  milliseconds late — fine for a property, useless for a method the page is
+  about to call.
+- With the toggle off, or the site paused, `navigator.credentials.get` is the
+  native method again once the decision lands: the guard unwraps itself rather
+  than sitting in the path of every credential request on the web.
+
+- [ ] **Still to check by hand:** a real "Sign in with Google" button, clicked,
+  on a site that uses one — with the toggle on. The automated pass proves
+  active mode is forwarded to the browser, but not that a full sign-in
+  completes.
 
 ---
 
