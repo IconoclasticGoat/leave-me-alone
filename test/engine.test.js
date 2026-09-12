@@ -102,3 +102,56 @@ describe('runEngine on a real Cookiebot banner', () => {
     expect(r.reason).toBe('unsupported-action');
   });
 });
+
+describe('runEngine on the cookieconsent library (local rule)', () => {
+  // neighborhoodscout.com, captured 2026-09-06. The open-source cookieconsent
+  // 3.x banner: no vendored rule detects it, and the cosmetic fallback could
+  // not see its "Got it!" either — an <a role="button"> with no href. The
+  // library persists a click as a year-long cookie, so clicking beats hiding:
+  // hidden, the banner re-renders on every page load; dismissed, it is gone.
+  const load = (html = readFileSync('test/fixtures/cookieconsent-v3.html', 'utf8')) => {
+    document.body.innerHTML = html;
+    for (const el of document.querySelectorAll('*')) {
+      el.getBoundingClientRect = () => ({ width: 900, height: 80 });
+    }
+  };
+
+  it('claims the banner with the local cookieconsent rule', async () => {
+    load();
+    const r = await runEngine(BUNDLE, document);
+    expect(r.handled).toBe('cookieconsent');
+  });
+
+  it('clicks "Got it!" on an info-type banner and hides the window', async () => {
+    load();
+    const clicked = [];
+    document.querySelector('.cc-window').addEventListener('click', (e) => clicked.push(e.target.className));
+    await runEngine(BUNDLE, document);
+    expect(clicked).toEqual(['cc-btn cc-dismiss']);
+    expect(document.querySelector('.cc-window').style.display).toBe('none');
+  });
+
+  it('clicks Decline, never Allow, on an opt-in banner', async () => {
+    // The library's opt-in/opt-out compliance block: {{deny}}{{allow}}.
+    load(readFileSync('test/fixtures/cookieconsent-v3.html', 'utf8').replace(
+      '<div class="cc-compliance"><a aria-label="dismiss cookie message" role="button" tabindex="0" class="cc-btn cc-dismiss">Got it!</a></div>',
+      '<div class="cc-compliance cc-highlight">'
+        + '<a aria-label="deny cookies" role="button" tabindex="0" class="cc-btn cc-deny">Decline</a>'
+        + '<a aria-label="allow cookies" role="button" tabindex="0" class="cc-btn cc-allow">Allow cookies</a></div>',
+    ));
+    expect(document.querySelector('.cc-allow')).not.toBeNull(); // the replace took
+    const clicked = [];
+    document.querySelector('.cc-window').addEventListener('click', (e) => clicked.push(e.target.className));
+    await runEngine(BUNDLE, document);
+    expect(clicked).toEqual(['cc-btn cc-deny']);
+  });
+
+  it('does not fire on a .cc-window that is not the cookieconsent library', async () => {
+    // Springer Nature's banner also uses cc-* class names; the aria-label the
+    // library stamps on its dialog is the discriminator.
+    load(`<div class="cc-window cc-banner" style="position:fixed">We use cookies.
+      <a role="button" class="cc-btn cc-dismiss">Got it!</a></div>`);
+    const r = await runEngine(BUNDLE, document);
+    expect(r.handled).not.toBe('cookieconsent');
+  });
+});

@@ -21,6 +21,13 @@ describe('rule bundle', () => {
     }
   });
 
+  it('carries every local rule, and names each in `local`', () => {
+    expect(b.local).toContain('cookieconsent');
+    for (const name of b.local) {
+      expect(b.rules[name], `local rule ${name}`).toBeDefined();
+    }
+  });
+
   it('has stripped $schema keys', () => {
     expect(JSON.stringify(b.rules)).not.toContain('$schema');
   });

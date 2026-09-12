@@ -46,13 +46,15 @@ batching if that list grew into the hundreds.
 
 **The cosmetic fallback misses banners whose only cookie wording sits in a link.** To stop it hiding ordinary page furniture, cookie-word matching is scoped to element prose and excludes `<a>`/`<button>` label text. A banner phrased "By continuing to browse you agree to our [Cookie Policy]" with an Accept button is therefore missed. This is the safe direction — under-hiding never breaks a page — but it is a real gap, not a theoretical one.
 
-**An accept control that is an `<a>` with no `href` is not recognised.** The
+**An accept control that is a bare `<a>` is not recognised.** The
 fallback counts an anchor as a control when it resolves to the same document or
-carries a `javascript:` href, which is what reaches drsquatch.com's "OK". A
-bare `<a>Accept</a>` with no `href` is still ignored: sites use those for
-layout as often as for controls, and treating them as consent actions would
-reopen the nav-bar false positives the tag restriction was added to prevent. No
-reported banner has needed it yet.
+carries a `javascript:` href, which is what reaches drsquatch.com's "OK", and
+when it has no href but declares `role="button"`, which is what reaches the
+cookieconsent library's "Got it!" on neighborhoodscout.com. An `<a>Accept</a>`
+with neither is still ignored: sites use those for layout as often as for
+controls, and treating them as consent actions would reopen the nav-bar false
+positives the tag restriction was added to prevent. No reported banner has
+needed it yet.
 
 **The iframe pass in the cosmetic fallback runs off a hand-written origin
 allowlist.** `CMP_FRAME_HOSTS` in `src/content/cosmetic.js` names thirteen
@@ -181,7 +183,7 @@ as 0x0 long after it is live — only *ordering* survives that. See
 
 - `src/background/index.js` is only partly tested. `test/background.test.js` covers the scheduler and the `chrome.storage.onChanged → schedule()` wiring; the `tabs.onUpdated` / `tabs.onActivated` stamping listeners still have no test.
 - The CMP method sequence is unpinned: reducing `ORDER` to `['DO_CONSENT']` passes. On a real site that means categories are unticked but never submitted — the extension appears to do nothing while tests stay green.
-- Only 1 of 202 vendored rules (Cookiebot) has an integration fixture.
+- Only 2 of 203 bundled rules (Cookiebot, and the local cookieconsent rule) have an integration fixture.
 - The evaluation-time guard in `createMatcher` — a Critical fix during implementation — has no test; deleting it leaves the suite green.
 - `declarativeNetRequest`'s `excludedRequestDomains` has never been given a
   bare-IP paused host in a real browser. `patternsFor` now skips the patterns

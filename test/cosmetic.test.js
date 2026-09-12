@@ -98,10 +98,39 @@ describe('hideCookieBanners', () => {
       expect(hideCookieBanners(document)).toBe(0);
     });
 
+    it('counts an href-less <a role="button"> as an accept control', () => {
+      // The cookieconsent library's "Got it!" (neighborhoodscout.com,
+      // captured 2026-09-06). mentionsCookies is true via plain prose, so
+      // the only thing that can produce 1 here is isInPageControl accepting
+      // an anchor with no href on the strength of role=button.
+      mount(`<div id="b" style="position:fixed;z-index:500">
+        We use cookies to improve your experience.
+        <a role="button" tabindex="0" class="cc-btn cc-dismiss">Got it!</a></div>`);
+      expect(hideCookieBanners(document)).toBe(1);
+    });
+
+    it('still ignores an <a role="button"> that navigates away', () => {
+      // role=button only rescues an anchor that goes nowhere; one with an
+      // off-page href is a styled link, and the navigation test still rules.
+      mount(`<div id="b" style="position:fixed;z-index:500">
+        We use cookies to improve your experience.
+        <a role="button" href="https://example.com/privacy">OK</a></div>`);
+      expect(hideCookieBanners(document)).toBe(0);
+    });
+
+    it('hides the captured cookieconsent banner when no rule runs', () => {
+      // Defence in depth: the local rule normally claims this, but the
+      // fallback must reach it on its own if the rule ever stops matching.
+      mount(readFileSync('test/fixtures/cookieconsent-v3.html', 'utf8'));
+      expect(hideCookieBanners(document)).toBe(1);
+      expect(document.querySelector('.cc-window').style.display).toBe('none');
+    });
+
     it('does not count an <a> as an accept control', () => {
       // mentionsCookies is true via plain prose ("We use cookies here."),
       // so the only thing that can produce 0 here is requiring the accept
-      // control to be a real button/[role=button], not an <a>.
+      // control to be a real button/[role=button], not a bare <a> with
+      // neither an href nor a role.
       mount(`<div id="b" style="position:fixed;z-index:500">
         We use cookies here. <a>Accept</a></div>`);
       expect(hideCookieBanners(document)).toBe(0);

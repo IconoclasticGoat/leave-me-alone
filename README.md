@@ -61,7 +61,7 @@ The extension makes no network requests of its own and collects no data. Consent
 
 ## Credits
 
-Cookie-banner rules are vendored from [Consent-O-Matic](https://github.com/cavi-au/Consent-O-Matic) (MIT), by the Center for Advanced Visualization and Interaction at Aarhus University.
+Cookie-banner rules are vendored from [Consent-O-Matic](https://github.com/cavi-au/Consent-O-Matic) (MIT), by the Center for Advanced Visualization and Interaction at Aarhus University. A few rules of our own, in the same format, live in `src/rules/local/` and are folded into the bundle by `npm run bundle-rules`.
 
 ## License
 
