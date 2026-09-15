@@ -1,7 +1,7 @@
 import { getSettings, isPaused } from '../settings.js';
 import { runEngine } from '../engine/index.js';
 import { hideCookieBanners, isCmpFrame } from './cosmetic.js';
-import { findNewsletterModals, dismissNewsletter } from './newsletter.js';
+import { findNewsletterModals, dismissNewsletter, isSignupFrame } from './newsletter.js';
 import { restoreScroll } from './scroll.js';
 import bundle from '../rules/bundle.json';
 
@@ -92,8 +92,13 @@ export function createSweeper({ settings, bundle, root = document, engine = runE
       // all — by a stylesheet, or by the frame's own content arriving. Layout
       // is the one thing that must happen for it to become visible, so watch
       // the frame rather than wait for a mutation that may never come. Scoped
-      // to allowlisted consent origins: watching every third-party frame on
-      // the page would cost far more than it is worth.
+      // to allowlisted consent and signup origins: watching every third-party
+      // frame on the page would cost far more than it is worth.
+      //
+      // A hosted signup widget has the same reveal: the wrapper can be in the
+      // DOM at zero size from page load and grow only when the frame's own
+      // content arrives, which raises no mutation here. Without this the sweep
+      // that would dismiss it may simply never be scheduled.
       function watchFrames() {
         let frames;
         try {
@@ -102,7 +107,7 @@ export function createSweeper({ settings, bundle, root = document, engine = runE
           return; // a hostile DOM must not break the scheduler
         }
         for (const frame of frames) {
-          if (watched.has(frame) || !isCmpFrame(frame)) continue;
+          if (watched.has(frame) || !(isCmpFrame(frame) || isSignupFrame(frame))) continue;
           watched.add(frame);
           frame.addEventListener('load', schedule);
           if (typeof ResizeObserver === 'function') {

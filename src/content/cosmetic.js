@@ -51,7 +51,11 @@ function matchesAcceptWord(controlText) {
 // nav's "Privacy preferences" link) only mentions it inside a control's own
 // label. Scoping the cookie-word scan to prose text (not control labels)
 // keeps that furniture out of the match without weakening real banners.
-function prose(el) {
+//
+// Exported because the newsletter pass needs the same question answered about
+// a modal wrapper: does the host page keep real content in this box, or is it
+// only a shell around someone else's frame?
+export function prose(el) {
   const clone = el.cloneNode(true);
   for (const n of clone.querySelectorAll('a, button, [role=button]')) n.remove();
   return (clone.textContent ?? '').toLowerCase();

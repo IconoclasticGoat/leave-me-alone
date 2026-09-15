@@ -185,6 +185,34 @@ snapshot of one site on one day.
   - The page scrolls freely and the user can read content unobstructed.
   - The modal does not reappear on page reload (unless the site's own logic resets it).
 
+### Item 7b: Signup popups served from a third-party frame
+
+Reported live (v1.1.3): a podcast publisher's site raised its newsletter popup
+with the extension enabled and unpaused. Its form is served from a hosted
+signup widget inside a cross-origin iframe, which splits the popup so that
+neither half is recognisable on its own — the host page keeps a fixed wrapper
+with no inputs and no copy, and inside the frame the form is not positioned as
+an overlay. The DOM heuristic cannot reach either half, so this needs checking
+in a real browser rather than in jsdom.
+
+- [ ] **Test:** With the newsletter toggle **on**, visit a site whose signup
+  popup is a hosted widget frame (view source and look for an `<iframe>` whose
+  `src` points at one of the origins in `SIGNUP_FRAME_SOURCES`). Trigger the
+  popup — some fire on a timer well past page load, some on scroll depth.
+- [ ] **Expected result:**
+  - The wrapper is dismissed, preferably by its own close control rather than
+    by being hidden, so the widget's "don't show again" cookie is set and the
+    page's scroll lock is released.
+  - The page scrolls freely afterwards.
+- [ ] **Negative pass:** On the same origins, find a page that embeds the same
+  widget **inline** — a footer block or a between-articles signup. It must be
+  left alone. So must a payment sheet, a paywall and a video lightbox, each of
+  which is also a fixed wrapper around a cross-origin frame.
+- [ ] **Note on timing:** a popup that fires later than `MAX_LIFE_MS` (60s, in
+  `src/content/index.js`) is missed regardless of shape. If a site's popup is
+  dismissed on a quick trigger but survives a slow one, that constant is the
+  cause, not the heuristic.
+
 ---
 
 ## Section 6: Negative Pass — Do Not Dismiss Non-Consent Elements — CORRECTNESS CRITICAL
