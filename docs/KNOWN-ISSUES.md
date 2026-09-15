@@ -69,6 +69,30 @@ page in a way under-hiding never does.
 
 **Newsletter heuristic residuals.** A cart drawer carrying both a discount code and an email input is dismissed. Commerce vetoes (`your bag`, `checkout`, `subtotal`) would close it. The heuristic is phrase-based and will never be exhaustive; per-site pause is the designed escape hatch.
 
+**The newsletter signup-frame allowlist is hand-written, and short.**
+`SIGNUP_FRAME_SOURCES` in `src/content/newsletter.js` names three widget
+origins, and like `CMP_FRAME_HOSTS` it governs which frames `start()` attaches
+a `ResizeObserver` and a `load` listener to as well as what the pass will
+dismiss. A sender that serves its popup form from an origin not on that list is
+invisible to both layers, exactly as an unlisted CMP origin is — and for the
+same reason: nothing in the codebase carries a
+list of email-service-provider embed origins to derive one from. The
+alternative, matching any cross-origin frame whose URL path looks like a signup
+(`/signup`, `/subscribe`), was rejected. A path is ambiguous in precisely the
+way the copy phrase "sign up" is — `accounts.example.com/signup` in a modal is
+account registration — and this file already refuses to act on that phrase in
+prose. Deciding by origin is what makes the path safe to read at all.
+
+**The newsletter pass does not traverse shadow roots.** `findNewsletterModals`
+queries with a plain `querySelectorAll`, which stops at every shadow boundary,
+so a popup rendered inside an open shadow root is invisible to it. The cookie
+side solved this (`scopesUnder`/`deepQuery` in `src/content/cosmetic.js`) and
+the newsletter side could reuse it directly. Noticed while adding the
+signup-frame pass and deliberately left alone: no reported popup has needed it,
+and widening what the heuristic can reach is the direction that costs an auth
+flow, so it wants a real case to calibrate against rather than a speculative
+one.
+
 **`stripWww` is not a public-suffix list.** Pause strips a leading `www.` only — `m.example.com` and `www2.example.com` are treated as distinct domains. True eTLD+1 needs a PSL, which this zero-dependency build does not carry. This now governs the `declarativeNetRequest` domain exclusions and the content-setting patterns as well, not just DOM-layer pause.
 
 ## Permissions

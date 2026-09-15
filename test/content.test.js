@@ -306,4 +306,18 @@ describe('sweeper watching consent frames', () => {
     mount(`<div style="position:fixed"><iframe id="f" src="${CMP}"></iframe></div>`);
     expect(() => createSweeper({ settings: ON, bundle: EMPTY_BUNDLE }).start()).not.toThrow();
   });
+
+  // A hosted signup widget is revealed the same way — its wrapper can sit in
+  // the DOM at zero size and grow only when the frame's content arrives, which
+  // raises no mutation in this document. Without a watch the sweep that would
+  // dismiss it is never scheduled at all.
+  it('watches a signup-widget frame too', async () => {
+    const SIGNUP = 'https://embeds.beehiiv.com/1f3c9b2e';
+    mount(`<div style="position:fixed"><iframe id="f" src="${SIGNUP}"></iframe></div>`);
+    const { sweep } = startSpied();
+    expect(resizeTargets).toHaveLength(1);
+    resizeTargets[0].fire();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sweep).toHaveBeenCalled();
+  });
 });

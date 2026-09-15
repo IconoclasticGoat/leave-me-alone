@@ -1,4 +1,5 @@
 import { isShown } from '../engine/tools.js';
+import { prose } from './cosmetic.js';
 
 // Deliberately excludes "sign up" / "signup". Those are the one phrase a
 // newsletter popup and an account-creation overlay genuinely share, so they
@@ -97,9 +98,77 @@ export function looksLikeNewsletter(el) {
   return false;
 }
 
+// Origins that serve a newsletter signup form from inside an iframe. A widget
+// that does this splits the popup across a frame boundary and neither half
+// looks like a newsletter: from the host page the wrapper is a fixed box with
+// zero inputs and no copy — every positive signal looksLikeNewsletter tests
+// for is behind the boundary — and inside the frame the form is laid out
+// normally, so isOverlay refuses it, because the host's wrapper rather than
+// the form owns the fixed placement. This is the same split the cookie side
+// hits with CMP frames; see CMP_FRAME_HOSTS in cosmetic.js.
+//
+// An allowlist is the safe direction for the reason given there: "fixed
+// wrapper around a cross-origin frame" equally describes a Stripe checkout, a
+// paywall and a video lightbox. The path is part of the match where the origin
+// is a general-purpose one — a sender's app domain serves its own dashboard
+// and, sooner or later, a hosted LOGIN widget, which is the one mistake this
+// file exists to avoid. A dedicated embed origin carries no path.
+const SIGNUP_FRAME_SOURCES = [
+  { host: 'embeds.beehiiv.com' },            // beehiiv
+  { host: 'substack.com', path: '/embed' },  // Substack
+  { host: 'app.hive.co', path: '/signup/' }, // Hive
+];
+
+export function isSignupFrame(frame) {
+  let url;
+  try {
+    url = new URL(frame.src, frame.ownerDocument.baseURI);
+  } catch {
+    return false; // an unparseable src is not an origin we recognise
+  }
+  const host = url.hostname.toLowerCase();
+  return SIGNUP_FRAME_SOURCES.some(({ host: h, path }) =>
+    (host === h || host.endsWith(`.${h}`))
+    && (!path || url.pathname.startsWith(path)));
+}
+
+// The element to dismiss for a signup frame is the fixed wrapper the widget
+// script puts around it, not the frame: the wrapper is what covers the
+// viewport and swallows every click, it carries the close button, and it
+// survives hiding the frame alone.
+//
+// Narrower than isOverlay on purpose — fixed/sticky only, no `absolute`.
+// The same embed origins are used for ordinary INLINE signup blocks in a
+// footer or between article sections, and an inline block sitting in some
+// absolutely-positioned section would otherwise read as a popup. A modal
+// wrapper is fixed in practice; requiring it is what keeps the page's own
+// furniture out of reach.
+function overlayForSignupFrame(frame) {
+  if (!isSignupFrame(frame) || !isShown(frame)) return null;
+  const doc = frame.ownerDocument;
+  const view = doc.defaultView;
+  for (let el = frame; el && el !== doc.body; el = el.parentElement) {
+    const { position } = view.getComputedStyle(el);
+    if (position !== 'fixed' && position !== 'sticky') continue;
+    // Prose in the wrapper means the host page keeps real content there;
+    // hiding it would take that content with it. Control labels are stripped
+    // first, so the wrapper's own "Close" button does not read as content.
+    if (prose(el).trim()) return null;
+    return el;
+  }
+  return null;
+}
+
 export function findNewsletterModals(root = document) {
   const candidates = root.querySelectorAll('div, section, aside, dialog');
-  return [...candidates].filter(looksLikeNewsletter);
+  const found = new Set([...candidates].filter(looksLikeNewsletter));
+  // Second pass: signup widgets served from a cross-origin frame, whose form
+  // and copy sit behind a boundary the pass above cannot read across.
+  for (const frame of root.querySelectorAll('iframe[src]')) {
+    const overlay = overlayForSignupFrame(frame);
+    if (overlay) found.add(overlay);
+  }
+  return [...found];
 }
 
 export function dismissNewsletter(el) {

@@ -1,7 +1,9 @@
 // test/newsletter.test.js
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
-import { looksLikeNewsletter, findNewsletterModals, dismissNewsletter } from '../src/content/newsletter.js';
+import {
+  looksLikeNewsletter, findNewsletterModals, dismissNewsletter, isSignupFrame,
+} from '../src/content/newsletter.js';
 
 const overlay = (inner) =>
   `<div id="m" style="position:fixed;z-index:9999">${inner}</div>`;
@@ -298,5 +300,114 @@ describe('dismissNewsletter', () => {
     const el = mount(overlay(`<input type="email"><button>Subscribe</button>`));
     dismissNewsletter(el);
     expect(el.style.display).toBe('none');
+  });
+});
+
+// A signup widget served from a third-party origin puts the form, the copy and
+// the email field inside an iframe, leaving the host page a bare fixed wrapper.
+// looksLikeNewsletter cannot see any of it: no input crosses the boundary, no
+// text crosses the boundary, and inside the frame the form is not an overlay
+// because the wrapper owns the fixed placement. Each negative below isolates
+// one guard — every other check passes on its fixture, so only the named guard
+// can produce the empty result.
+describe('findNewsletterModals — cross-origin signup frames', () => {
+  const framed = (src, { position = 'fixed', prose = '' } = {}) =>
+    `<div id="m" style="position:${position};z-index:9999">${prose}
+      <button aria-label="Close">x</button>
+      <iframe src="${src}"></iframe></div>`;
+
+  it('finds the fixed wrapper around a hosted signup widget', () => {
+    mount(framed('https://app.hive.co/signup/widget/1072/spotlight/'));
+    expect(findNewsletterModals()).toEqual([document.querySelector('#m')]);
+  });
+
+  it('finds a wrapper around a dedicated embed origin, which needs no path', () => {
+    mount(framed('https://embeds.beehiiv.com/1f3c9b2e-0000-4a5d-9c11-abcdef012345'));
+    expect(findNewsletterModals()).toEqual([document.querySelector('#m')]);
+  });
+
+  it('matches an embed origin on a subdomain', () => {
+    mount(framed('https://example.substack.com/embed'));
+    expect(findNewsletterModals()).toEqual([document.querySelector('#m')]);
+  });
+
+  it('accepts a sticky wrapper as well as a fixed one', () => {
+    mount(framed('https://embeds.beehiiv.com/abc', { position: 'sticky' }));
+    expect(findNewsletterModals()).toEqual([document.querySelector('#m')]);
+  });
+
+  // Isolates the origin allowlist. Identical shape, and exactly the case the
+  // allowlist exists to protect: hiding a payment sheet breaks the page in a
+  // way missing a newsletter never does.
+  it('leaves a fixed wrapper around an unrecognised frame alone', () => {
+    mount(framed('https://js.stripe.com/v3/elements-inner-payment'));
+    expect(findNewsletterModals()).toEqual([]);
+  });
+
+  // Isolates the path half of the match. Same allowlisted origin, but a
+  // general-purpose one — its other widgets are not ours to dismiss.
+  it('leaves another widget on the same sender origin alone', () => {
+    mount(framed('https://app.hive.co/login/widget/1072/'));
+    expect(findNewsletterModals()).toEqual([]);
+  });
+
+  // Isolates the fixed/sticky requirement, which is what tells a popup from the
+  // same widget embedded inline in a footer or between article sections.
+  it('leaves an inline embed of the same widget alone', () => {
+    mount(framed('https://embeds.beehiiv.com/abc', { position: 'relative' }));
+    expect(findNewsletterModals()).toEqual([]);
+  });
+
+  // Isolates the prose refusal. The wrapper is the host page's own content box,
+  // so hiding it would take that content with it.
+  it('leaves a fixed wrapper that holds host-page content alone', () => {
+    mount(framed('https://embeds.beehiiv.com/abc', { prose: '<p>Latest episode</p>' }));
+    expect(findNewsletterModals()).toEqual([]);
+  });
+
+  // Isolates isShown: the wrapper is still in the DOM between openings, and a
+  // widget that has not fired yet must not be counted as dismissed.
+  it('leaves a hidden wrapper alone', () => {
+    document.body.innerHTML = framed('https://embeds.beehiiv.com/abc');
+    expect(findNewsletterModals()).toEqual([]);
+  });
+
+  it('dismisses by clicking the wrapper close control, not by hiding', () => {
+    const el = mount(framed('https://app.hive.co/signup/widget/1072/spotlight/'));
+    let clicked = false;
+    el.querySelector('[aria-label=Close]').addEventListener('click', () => { clicked = true; });
+    expect(dismissNewsletter(el)).toBe('clicked-close');
+    expect(clicked).toBe(true);
+  });
+
+  it('reports both a light-DOM popup and a framed one, without duplicates', () => {
+    mount(`<div id="m" style="position:fixed;z-index:9999">
+        <h2>Join our newsletter</h2><input type="email"><button>Subscribe</button>
+      </div>
+      <div id="f" style="position:fixed;z-index:9999">
+        <iframe src="https://embeds.beehiiv.com/abc"></iframe>
+      </div>`);
+    expect(findNewsletterModals()).toEqual([
+      document.querySelector('#m'), document.querySelector('#f'),
+    ]);
+  });
+});
+
+describe('isSignupFrame', () => {
+  const frameWith = (src) => {
+    document.body.innerHTML = `<iframe src="${src}"></iframe>`;
+    return document.querySelector('iframe');
+  };
+
+  it('does not match a look-alike domain that merely ends with the name', () => {
+    expect(isSignupFrame(frameWith('https://notsubstack.com/embed'))).toBe(false);
+  });
+
+  it('matches the real host and its subdomains', () => {
+    expect(isSignupFrame(frameWith('https://a.b.substack.com/embed'))).toBe(true);
+  });
+
+  it('is not fooled by the widget path on an unrelated origin', () => {
+    expect(isSignupFrame(frameWith('https://evil.example/signup/widget/1/'))).toBe(false);
   });
 });
