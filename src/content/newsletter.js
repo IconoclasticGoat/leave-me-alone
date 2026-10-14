@@ -31,8 +31,12 @@ const CLOSE_SELECTORS = [
 // input, overlay positioning, and "Sign up" copy — all three signals — yet
 // dismissing it breaks the site's login. Missing a newsletter is cheap;
 // destroying an auth flow is not.
+//
+// Entries are regex source, matched from the start of a word (see AUTH_RE).
+// 'signin' alone is closed at the end as well: open, it matches "signing",
+// and "By signing up you agree…" is ordinary newsletter consent copy.
 const AUTH_MARKERS = [
-  'sign in', 'signin', 'log in', 'login', 'already have an account',
+  'sign in', 'signin\\b', 'log in', 'login', 'already have an account',
   'continue with google', 'continue with apple', 'continue with facebook',
   'magic link', 'verification code', 'one-time code',
   'forgot password', 'reset password',
@@ -49,6 +53,25 @@ const AUTH_MARKERS = [
   'shipping', 'billing', 'delivery address', 'card number',
   'checkout', 'continue to payment',
 ];
+
+// Anchored at the start only. As bare substrings the markers also fired
+// inside other words — 'log in' on "our blog in your inbox" — and no auth
+// phrase starts mid-word. The end stays open so "log into" and "registered"
+// still count.
+const AUTH_RE = new RegExp(`\\b(?:${AUTH_MARKERS.join('|')})`);
+
+// Word boundaries need the text two ways. textContent runs neighbouring
+// elements together — <button>Go</button><a>Already have an account?</a>
+// reads "goalready have…" — so it hides the start of a word. Spacing every
+// text node apart fixes that but splits a word styled in pieces
+// (<span>S</span>ign in), which only textContent still reads whole.
+function isAuthFlow(el, text) {
+  if (AUTH_RE.test(text)) return true;
+  const walker = el.ownerDocument.createTreeWalker(el, 4 /* NodeFilter.SHOW_TEXT */);
+  const parts = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) parts.push(n.data);
+  return AUTH_RE.test(parts.join(' ').toLowerCase());
+}
 
 // US SMS marketing consent copy is legally mandated boilerplate, which makes it
 // a far more precise signal than the phone field itself. A phone field alone is
@@ -78,7 +101,7 @@ export function looksLikeNewsletter(el) {
   if (inputs.length > 2) return false;
 
   const text = (el.textContent ?? '').toLowerCase();
-  if (AUTH_MARKERS.some((w) => text.includes(w))) return false;
+  if (isAuthFlow(el, text)) return false;
 
   const hasEmail = Boolean(
     el.querySelector('input[type=email], input[name*="email" i], input[placeholder*="email" i]')
@@ -97,9 +120,29 @@ export function looksLikeNewsletter(el) {
   return false;
 }
 
-export function findNewsletterModals(root = document) {
+// Popups reported still showing with the toggle on, named by host. The
+// heuristic stays conservative on purpose, so some real popups will always
+// fall outside it. Hosts match the way pause does: the domain and any
+// subdomain.
+const KNOWN_POPUPS = [
+  // "Subscribe to our newsletters!" The id is the one AdGuard's Annoyances
+  // filter hides on this host.
+  { host: 'wowhead.com', selector: '#newsletter-cta-wrapper' },
+];
+
+function knownPopups(root, host) {
+  const h = String(host).toLowerCase();
+  return KNOWN_POPUPS
+    .filter((p) => h === p.host || h.endsWith(`.${p.host}`))
+    .flatMap((p) => [...root.querySelectorAll(p.selector)])
+    .filter(isShown);
+}
+
+export function findNewsletterModals(root = document, host = root.location?.hostname ?? '') {
   const candidates = root.querySelectorAll('div, section, aside, dialog');
-  return [...candidates].filter(looksLikeNewsletter);
+  const found = new Set([...candidates].filter(looksLikeNewsletter));
+  for (const el of knownPopups(root, host)) found.add(el);
+  return [...found];
 }
 
 export function dismissNewsletter(el) {

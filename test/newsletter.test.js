@@ -94,6 +94,22 @@ describe('looksLikeNewsletter — positives', () => {
       <p>Msg frequency varies. Reply HELP for help.</p>`));
     expect(looksLikeNewsletter(el)).toBe(true);
   });
+
+  // Auth markers used to match anywhere in the text, so 'signin' fired inside
+  // "signing" and 'log in' inside "blog in". Each of these carries nothing
+  // else an auth flow would.
+  it('flags a popup whose consent line says "By signing up"', () => {
+    const el = mount(overlay(`<h2>Subscribe to our newsletters!</h2>
+      <input type="email"><button>Subscribe</button>
+      <p>By signing up you agree to receive emails from us.</p>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
+
+  it('flags a popup offering "our blog in your inbox"', () => {
+    const el = mount(overlay(`<h2>Get our blog in your inbox</h2>
+      <input type="email"><button>Subscribe</button>`));
+    expect(looksLikeNewsletter(el)).toBe(true);
+  });
 });
 
 describe('looksLikeNewsletter — negatives', () => {
@@ -256,6 +272,31 @@ describe('looksLikeNewsletter — negatives', () => {
     expect(looksLikeNewsletter(el)).toBe(false);
   });
 
+  // The other side of anchoring the auth markers at a word start: the start is
+  // all that moved. The end stays open, so inflections still refuse, and
+  // 'signin' as a word of its own still refuses.
+  it('refuses "log into" under newsletter copy', () => {
+    const el = mount(overlay(`<h2>Join our newsletter</h2>
+      <p>Log into your profile to choose topics.</p><input type="email">`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  // textContent reads these two buttons as "signinhelp", which has no word
+  // end after "signin". Only the spaced reading of the text refuses it.
+  it('refuses "Signin" run together with the next element', () => {
+    const el = mount(overlay(`<h2>Join our newsletter</h2>
+      <input type="email"><button>Signin</button><a>Help</a>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
+  // The spaced reading splits this into "s ign in". Only textContent, which
+  // keeps the word whole, refuses it.
+  it('refuses a "Sign in" whose first letter is styled apart', () => {
+    const el = mount(overlay(`<h2>Join our newsletter</h2>
+      <input type="email"><button><span>S</span>ign in</button>`));
+    expect(looksLikeNewsletter(el)).toBe(false);
+  });
+
   it('refuses a registration wall that dangles a discount', () => {
     // The realistic e-commerce pattern: account creation sold with a coupon.
     const el = mount(overlay(`<h2>Create your free account</h2>
@@ -281,6 +322,33 @@ describe('looksLikeNewsletter — negatives', () => {
     const el = mount(overlay(`<h2>Welcome</h2>
       <input type="email"><button>Continue</button>`));
     expect(looksLikeNewsletter(el)).toBe(false);
+  });
+});
+
+// The fixture is not wowhead's markup: the page could not be loaded when this
+// was written. It is deliberately one the heuristic refuses (no email field),
+// so only the host entry can be what finds it.
+describe('findNewsletterModals — known popups', () => {
+  const wowhead = `<div id="newsletter-cta-wrapper">
+    <h2>Subscribe to our newsletters!</h2><button>Subscribe</button></div>`;
+
+  it('finds wowhead.com\'s newsletter popup by its id', () => {
+    mount(wowhead);
+    const found = findNewsletterModals(document, 'www.wowhead.com');
+    expect(found.map((el) => el.id)).toEqual(['newsletter-cta-wrapper']);
+  });
+
+  it('leaves the same id alone on any other host', () => {
+    mount(wowhead);
+    expect(findNewsletterModals(document, 'example.com')).toEqual([]);
+    expect(findNewsletterModals(document, 'notwowhead.com')).toEqual([]);
+  });
+
+  // A hidden one is already out of the way. Acting on it anyway would count
+  // as a dismissal every sweep, and every dismissal restores scroll.
+  it('leaves it alone while it is hidden', () => {
+    document.body.innerHTML = wowhead;
+    expect(findNewsletterModals(document, 'www.wowhead.com')).toEqual([]);
   });
 });
 

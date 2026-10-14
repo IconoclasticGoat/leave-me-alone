@@ -67,7 +67,7 @@ frame as a banner, was rejected: that shape equally describes a Stripe
 checkout, a paywall and a video lightbox, and hiding one of those breaks the
 page in a way under-hiding never does.
 
-**Newsletter heuristic residuals.** A cart drawer carrying both a discount code and an email input is dismissed. Commerce vetoes (`your bag`, `checkout`, `subtotal`) would close it. The heuristic is phrase-based and will never be exhaustive; per-site pause is the designed escape hatch.
+**Newsletter heuristic residuals.** A cart drawer carrying both a discount code and an email input is dismissed. Commerce vetoes (`your bag`, `checkout`, `subtotal`) would close it. The heuristic is phrase-based and will never be exhaustive; per-site pause is the designed escape hatch. A popup reported still showing with the toggle on can be named by host in `KNOWN_POPUPS` in `src/content/newsletter.js`; wowhead.com's is the first entry.
 
 **`stripWww` is not a public-suffix list.** Pause strips a leading `www.` only — `m.example.com` and `www2.example.com` are treated as distinct domains. True eTLD+1 needs a PSL, which this zero-dependency build does not carry. This now governs the `declarativeNetRequest` domain exclusions and the content-setting patterns as well, not just DOM-layer pause.
 
