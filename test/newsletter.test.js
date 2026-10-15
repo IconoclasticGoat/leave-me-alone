@@ -284,6 +284,57 @@ describe('looksLikeNewsletter — negatives', () => {
   });
 });
 
+// Trimmed from the live wowhead.com page, 2026-10-14. The inline styles stand
+// in for site CSS, which also sizes the wrapper to the viewport when empty.
+describe('findNewsletterModals — known popups', () => {
+  const wrapper = (inner) =>
+    `<div id="newsletter-cta-wrapper" style="position:fixed;z-index:2147483647">${inner}</div>`;
+  const wowhead = wrapper(`<div class="newsletter-cta-overlay" style="display: block;"></div>
+    <div class="newsletter-cta-popover" style="position:absolute;z-index:2147483647">
+      <div class="newsletter-cta-popover-banner"><button type="button" aria-label="Close">x</button></div>
+      <h2>Subscribe to our Newsletters!</h2>
+      <p>Stay in the loop with weekly recaps, fun facts, and the latest and greatest breaking news Wowhead has to offer.</p>
+      <label><input type="checkbox" checked>Wowhead Retail News and Updates</label>
+      <label><input type="checkbox">Wowhead Mists of Pandaria Classic News and Updates</label>
+      <label><input type="checkbox">Wowhead Forever News and Updates</label>
+      <label><input type="checkbox">By subscribing you agree to our Terms of Service and Privacy Policy.</label>
+      <input type="email"><button>No thanks</button><button>Subscribe (1)</button>
+    </div>`);
+
+  it('needs the host entry: five inputs put it past the heuristic', () => {
+    mount(wowhead);
+    expect(findNewsletterModals(document, 'example.com')).toEqual([]);
+  });
+
+  it('finds wowhead.com\'s popup and dismisses it with its own Close button', () => {
+    mount(wowhead);
+    const found = findNewsletterModals(document, 'www.wowhead.com');
+    expect(found.map((el) => el.id)).toEqual(['newsletter-cta-wrapper']);
+    let clicked = false;
+    found[0].querySelector('[aria-label=Close]').addEventListener('click', () => { clicked = true; });
+    expect(dismissNewsletter(found[0])).toBe('clicked-close');
+    expect(clicked).toBe(true);
+  });
+
+  it('leaves the empty wrapper alone even though it fills the viewport', () => {
+    mount(wrapper(''));
+    expect(findNewsletterModals(document, 'www.wowhead.com')).toEqual([]);
+  });
+
+  it('leaves the same markup alone on any other host', () => {
+    mount(wowhead);
+    expect(findNewsletterModals(document, 'notwowhead.com')).toEqual([]);
+  });
+
+  // Once hidden it is out of the way. Acting on it again would count as a
+  // dismissal every sweep, and every dismissal restores scroll.
+  it('leaves it alone once hidden', () => {
+    mount(wowhead);
+    document.getElementById('newsletter-cta-wrapper').style.display = 'none';
+    expect(findNewsletterModals(document, 'www.wowhead.com')).toEqual([]);
+  });
+});
+
 describe('dismissNewsletter', () => {
   it('prefers clicking a close control', () => {
     const el = mount(overlay(`<button aria-label="Close">x</button>

@@ -97,9 +97,33 @@ export function looksLikeNewsletter(el) {
   return false;
 }
 
-export function findNewsletterModals(root = document) {
+// Popups reported still showing with the toggle on, named by host. The
+// heuristic stays conservative on purpose, so some real popups will always
+// fall outside it. Hosts match the way pause does: the domain and any
+// subdomain.
+const KNOWN_POPUPS = [
+  // "Subscribe to our Newsletters!" Three newsletter checkboxes, a consent
+  // checkbox and the email field make five inputs, past the limit above.
+  // The wrapper sits on every page and site CSS sizes it to the viewport, so
+  // it only counts once the popover is inside. Matching the wrapper, not the
+  // popover, means the fallback hide also takes the dimming overlay. Its own
+  // Close button snoozes the popup for 30 days.
+  { host: 'wowhead.com', selector: '#newsletter-cta-wrapper:has(.newsletter-cta-popover)' },
+];
+
+function knownPopups(root, host) {
+  const h = String(host).toLowerCase();
+  return KNOWN_POPUPS
+    .filter((p) => h === p.host || h.endsWith(`.${p.host}`))
+    .flatMap((p) => [...root.querySelectorAll(p.selector)])
+    .filter(isShown);
+}
+
+export function findNewsletterModals(root = document, host = root.location?.hostname ?? '') {
   const candidates = root.querySelectorAll('div, section, aside, dialog');
-  return [...candidates].filter(looksLikeNewsletter);
+  const found = new Set([...candidates].filter(looksLikeNewsletter));
+  for (const el of knownPopups(root, host)) found.add(el);
+  return [...found];
 }
 
 export function dismissNewsletter(el) {
